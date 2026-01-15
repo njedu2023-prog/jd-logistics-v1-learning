@@ -152,7 +152,10 @@ def http_get_text(url: str) -> str:
 
 def fetch_market_row_blocking(url: str) -> Tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
     """
-    按方案A：有限次阻塞重试；成功返回 market_row；失败返回 None
+    方案A：有限次阻塞重试；成功返回 market_row；失败返回 None
+    兼容两种JSON结构：
+      A) {date, open, high, low, close, volume, amount}  —— amount 单位：港元（整数）
+      B) {trade_date, open, high, low, close, volume, amount_yi_hkd}
     """
     diag = {
         "source_url": url,
@@ -160,18 +163,37 @@ def fetch_market_row_blocking(url: str) -> Tuple[Optional[Dict[str, Any]], Dict[
         "ok": False,
         "last_error": None,
     }
+
     for i in range(1, RETRY_MAX + 1):
         diag["attempts"] = i
         try:
             txt = http_get_text(url)
-            market = json.loads(txt)
-            # 基本字段校验（不推断、不回填）
-            required = ["trade_date", "open", "high", "low", "close", "volume", "amount_yi_hkd"]
-            missing = [k for k in required if k not in market]
-            if missing:
-                raise ValueError(f"JSON缺字段: {missing}")
+            raw = json.loads(txt)
 
-            # 强制类型
+            if not isinstance(raw, dict):
+                raise ValueError("JSON不是对象(dict)")
+
+            # -------- 兼容字段映射（不推断，只做确定性重命名/换算） --------
+            market = dict(raw)
+
+            # 情况A：date -> trade_date
+            if "trade_date" not in market and "date" in market:
+                market["trade_date"] = market.get("date")
+
+            # 情况A：amount(港元) -> amount_yi_hkd(亿港元)
+            if "amount_yi_hkd" not in market and "amount" in market:
+                amt = market.get("amount", None)
+                if amt is None:
+                    raise ValueError("amount为空")
+                market["amount_yi_hkd"] = round(float(amt) / 1e8, 4)
+
+            # -------- 基本字段校验（不推断、不回填） --------
+            required = ["trade_date", "open", "high", "low", "close", "volume", "amount_yi_hkd"]
+            missing = [k for k in required if k not in market or market[k] in ("", None)]
+            if missing:
+                raise ValueError(f"JSON缺字段或为空: {missing}")
+
+            # -------- 强制类型 --------
             market_row = {
                 "trade_date": str(market["trade_date"]),
                 "open": float(market["open"]),
@@ -185,13 +207,16 @@ def fetch_market_row_blocking(url: str) -> Tuple[Optional[Dict[str, Any]], Dict[
                 "fetched_at_bjt": now_bjt_iso(),
                 "raw_sha1": sha1_of_text(txt),
             }
+
             diag["ok"] = True
             return market_row, diag
+
         except Exception as e:
             diag["last_error"] = str(e)
             time.sleep(RETRY_SLEEP_SEC)
 
     return None, diag
+
 
 
 # =========================
