@@ -153,9 +153,6 @@ def http_get_text(url: str) -> str:
 def fetch_market_row_blocking(url: str) -> Tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
     """
     方案A：有限次阻塞重试；成功返回 market_row；失败返回 None
-    兼容两种JSON结构：
-      A) {date, open, high, low, close, volume, amount}  —— amount 单位：港元（整数）
-      B) {trade_date, open, high, low, close, volume, amount_yi_hkd}
     """
     diag = {
         "source_url": url,
@@ -169,7 +166,6 @@ def fetch_market_row_blocking(url: str) -> Tuple[Optional[Dict[str, Any]], Dict[
         try:
             txt = http_get_text(url)
             raw = json.loads(txt)
-
             if not isinstance(raw, dict):
                 raise ValueError("JSON不是对象(dict)")
 
@@ -327,7 +323,13 @@ def make_predictions(state: Dict[str, Any], spot_close: float, target_trade_date
     生成分位点预测：T+1 / 1个月 / 6个月（最小可跑通版）
     """
     sigma = float(state.get("sigma_base", 0.035))
-    mu = float(state.get("mu_base", 0.0))
+    mu_raw = state.get("mu_base", 0.0)
+    mu = float(0.0 if mu_raw is None else mu_raw)
+
+    sigma_raw = state.get("sigma_base", 0.035)
+    sigma = float(0.035 if sigma_raw is None else sigma_raw)
+
+
 
     # 时间尺度（近似交易日）
     t1 = 1/252
