@@ -1,31 +1,29 @@
 {
   "model_version": "V1.0",
   "symbol": "02618.HK",
-
   "last_success_trade_date": null,
   "last_run_id": null,
-
   "mu_base": null,
   "sigma_short": null,
   "sigma_mid": null,
   "sigma_long": null,
-
   "enable_volume_factor": true,
   "enable_beta_anchor": true,
-
   "beta_window": 60,
   "volume_window": 20,
-
   "safety_limits": {
     "mu_min": -0.02,
     "mu_max": 0.02,
     "sigma_short_min": 0.005,
-    "sigma_short_max": 0.20,
+    "sigma_short_max": 0.2,
     "sigma_mid_min": 0.005,
-    "sigma_mid_max": 0.30,
+    "sigma_mid_max": 0.3,
     "sigma_long_min": 0.005,
-    "sigma_long_max": 0.40
+    "sigma_long_max": 0.4
   },
-
-  "updated_at_bjt": null
+  "updated_at_bjt": "2026-01-15T15:33:33",
+  "created_at_bjt": "2026-01-15T15:33:33",
+  "sigma_base": 0.035,
+  "last_close": 11.82,
+  "last_trade_date": "2026-01-14"
 }
