@@ -45,7 +45,7 @@
   <div class="card">
     <div class="small">
       数据源：<span class="mono">runs/latest_report.json</span>（由 GitHub Actions 运行后自动写入）<br>
-      若提示“数据不可用”，说明当日真实数据字段缺失或抓取失败，但界面仍会保持法定结构。
+      说明：你已选择“法定界面优先”，因此即便当日数据缺失，页面也会输出完整结构，并在顶部提示原因。
     </div>
   </div>
 </div>
@@ -53,6 +53,9 @@
 <script>
 const $ = (id)=>document.getElementById(id);
 
+function escapeHtml(s){
+  return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+}
 function kvTable(obj){
   if(!obj || typeof obj !== 'object') return '<div class="small">数据不可用</div>';
   const rows = Object.entries(obj).map(([k,v])=>{
@@ -61,7 +64,6 @@ function kvTable(obj){
   }).join('');
   return `<table><tbody>${rows}</tbody></table>`;
 }
-
 function arrayTable(arr){
   if(!Array.isArray(arr) || arr.length===0) return '<div class="small">暂无数据</div>';
   const keys = Array.from(new Set(arr.flatMap(x=>Object.keys(x||{}))));
@@ -77,8 +79,20 @@ function arrayTable(arr){
   return `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
 }
 
-function escapeHtml(s){
-  return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+function renderFallback(reason){
+  $('statusTag').textContent = 'FAIL';
+  $('statusTag').className = 'tag fail';
+  $('metaLine').textContent = '法定界面已输出（数据不可用 / 报告未生成）';
+  $('hint').textContent = reason || '当日真实数据缺失，已按“法定界面优先”输出空白结构。';
+  $('top').className = 'card bad';
+
+  $('m1c').innerHTML = '<div class="small">数据不可用（模块结构保留）</div>';
+  $('m2c').innerHTML = '<div class="small">数据不可用（模块结构保留）</div>';
+  $('m3c').innerHTML = '<div class="small">暂无数据（模块结构保留）</div>';
+  $('m4c').innerHTML = '<div class="small">暂无数据（模块结构保留）</div>';
+  $('m5c').innerHTML = '<div class="small">暂无数据（模块结构保留）</div>';
+  $('m6c').innerHTML = '<div class="small">数据不可用（模块结构保留）</div>';
+  $('m7c').innerHTML = '<div class="small">暂无数据（模块结构保留）</div>';
 }
 
 async function load(){
@@ -88,29 +102,27 @@ async function load(){
     if(!r.ok) throw new Error('HTTP ' + r.status);
     const data = await r.json();
 
-    // 顶部信息
     const status = data.status || 'UNKNOWN';
     $('statusTag').textContent = status;
     $('statusTag').className = 'tag ' + (status==='SUCCESS'?'ok':(status==='FAIL'?'fail':''));
     $('metaLine').textContent = `symbol=${data.symbol||'02618.HK'}  |  date=${data.trade_date||'未知'}  |  generated_at=${data.generated_at_bjt||'未知'}`;
     $('hint').textContent = data.report_reason ? `提示：${data.report_reason}` : '';
 
-    // 模块渲染（字段名允许你后续按法定 schema 固化）
-    $('m1c').innerHTML = kvTable(data.module_1_market || data.market || data.m1);
-    $('m2c').innerHTML = kvTable(data.module_2_yesterday_review || data.yesterday_review || data.m2);
-    $('m3c').innerHTML = arrayTable(data.module_3_t1_distribution || data.t1_distribution || data.m3);
-    $('m4c').innerHTML = arrayTable(data.module_4_1m_distribution || data.m1_distribution || data.m4);
-    $('m5c').innerHTML = arrayTable(data.module_5_6m_distribution || data.m6_distribution || data.m5);
-    $('m6c').innerHTML = kvTable(data.module_6_model_state || data.model_state || data.m6);
-    $('m7c').innerHTML = arrayTable(data.module_7_last5_hit || data.last5 || data.m7);
+    // 渲染模块（字段名后续可与你的“法定 schema”完全对齐）
+    $('m1c').innerHTML = kvTable(data.module_1_market || {});
+    $('m2c').innerHTML = kvTable(data.module_2_yesterday_review || {});
+    $('m3c').innerHTML = arrayTable(data.module_3_t1_distribution || []);
+    $('m4c').innerHTML = arrayTable(data.module_4_1m_distribution || []);
+    $('m5c').innerHTML = arrayTable(data.module_5_6m_distribution || []);
+    $('m6c').innerHTML = kvTable(data.module_6_model_state || {});
+    $('m7c').innerHTML = arrayTable(data.module_7_last5_hit || []);
 
+    if(status !== 'SUCCESS'){
+      $('top').className = 'card bad';
+    }
   }catch(e){
-    $('statusTag').textContent = 'NO_DATA';
-    $('statusTag').className = 'tag fail';
-    $('metaLine').textContent = '无法读取 runs/latest_report.json（尚未生成报告或路径不存在）';
-    $('hint').innerHTML = `当前只有运行日志可用：<a href="runs/run_log.jsonl">runs/run_log.jsonl</a>`;
-    $('top').className = 'card bad';
-    ['m1c','m2c','m3c','m4c','m5c','m6c','m7c'].forEach(id=>$(id).innerHTML='<div class="small">数据不可用</div>');
+    // 如果 json 根本不存在，也必须输出法定界面（你选的方案②）
+    renderFallback('无法读取 runs/latest_report.json（尚未生成或路径不存在）。你可以先看 runs/run_log.jsonl 了解失败原因。');
   }
 }
 
