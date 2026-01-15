@@ -100,6 +100,45 @@ def pct(a: float, b: float) -> float:
         return 0.0
     return abs(a - b) / abs(b) * 100.0
 
+def fetch_module_1_market():
+    """
+    模块①：当日真实交易数据（唯一数据源）
+    """
+    if requests is None:
+        raise RuntimeError("requests not available")
+
+    last_err = None
+    for _ in range(RETRY_MAX):
+        try:
+            resp = requests.get(MARKET_URL, timeout=HTTP_TIMEOUT)
+            resp.raise_for_status()
+            data = resp.json()
+
+            # 上游字段适配
+            trade_date = str(data.get("date", "")).strip()
+            amount = data.get("amount", None)
+
+            if not trade_date or amount is None:
+                raise ValueError("missing trade_date or amount")
+
+            amount_yi_hkd = round(float(amount) / 1e8, 4)
+
+            return {
+                "symbol": SYMBOL,
+                "trade_date": trade_date,
+                "open": data.get("open", ""),
+                "high": data.get("high", ""),
+                "low": data.get("low", ""),
+                "close": data.get("close", ""),
+                "volume": data.get("volume", ""),
+                "amount_yi_hkd": amount_yi_hkd,
+            }
+
+        except Exception as e:
+            last_err = e
+            time.sleep(RETRY_SLEEP_SEC)
+
+    raise RuntimeError(f"module_1_market failed: {last_err}")
 
 # =========================
 # 数据抓取（方案A阻塞重试）
