@@ -285,55 +285,62 @@ def find_yesterday_pred_for_today(today_trade_date: str) -> Optional[Dict[str, A
 def make_predictions(state: Dict[str, Any], today_close: float, today_trade_date: str) -> Dict[str, Any]:
     mu_raw = state.get("mu_base")
 
-if mu_raw is None:
     # 冷启动兜底值（只在第一次）
-    mu = 0.0
-else:
-    mu = float(mu_raw)
-    sig_s = float(state["sigma_short"])
-    sig_m = float(state["sigma_mid"])
-    sig_l = float(state["sigma_long"])
+    if mu_raw is None:
+        mu_raw = 0.0
 
-    # 时间尺度（年）
-    t1 = 1.0 / TRADING_DAYS
-    m1 = 21.0 / TRADING_DAYS
-    m6 = 126.0 / TRADING_DAYS
+    def build_prediction_output(
+        mu_raw: float,
+        state: Dict[str, Any],
+        today_trade_date: str,
+        today_close: float,
+    ) -> Dict[str, Any]:
+        mu = float(mu_raw)
+        sig_s = float(state["sigma_short"])
+        sig_m = float(state["sigma_mid"])
+        sig_l = float(state["sigma_long"])
 
-    out = {
-        "pred_date": today_trade_date,               # 按你定义：收盘后生成
-        "target_trade_date_t1": today_trade_date,    # 这里严格上应为T+1交易日；若你有交易日历可替换
-        "symbol": SYMBOL,
+        # 时间尺度（年）
+        t1 = 1.0 / TRADING_DAYS
+        m1 = 21.0 / TRADING_DAYS
+        m6 = 126.0 / TRADING_DAYS
 
-        "module3_t1_p05": gbm_quantile(today_close, mu, sig_s, t1, Z[0.05]),
-        "module3_t1_p25": gbm_quantile(today_close, mu, sig_s, t1, Z[0.25]),
-        "module3_t1_p50": gbm_quantile(today_close, mu, sig_s, t1, Z[0.50]),
-        "module3_t1_p75": gbm_quantile(today_close, mu, sig_s, t1, Z[0.75]),
-        "module3_t1_p95": gbm_quantile(today_close, mu, sig_s, t1, Z[0.95]),
+        out = {
+            "pred_date": today_trade_date,  # 收盘后生成
+            "target_trade_date_t1": today_trade_date,  # 若有交易日历可替换为 T+1
+            "symbol": SYMBOL,
 
-        "module4_m1_p05": gbm_quantile(today_close, mu, sig_m, m1, Z[0.05]),
-        "module4_m1_p25": gbm_quantile(today_close, mu, sig_m, m1, Z[0.25]),
-        "module4_m1_p50": gbm_quantile(today_close, mu, sig_m, m1, Z[0.50]),
-        "module4_m1_p75": gbm_quantile(today_close, mu, sig_m, m1, Z[0.75]),
-        "module4_m1_p95": gbm_quantile(today_close, mu, sig_m, m1, Z[0.95]),
+            "module3_t1_p05": gbm_quantile(today_close, mu, sig_s, t1, Z[0.05]),
+            "module3_t1_p25": gbm_quantile(today_close, mu, sig_s, t1, Z[0.25]),
+            "module3_t1_p50": gbm_quantile(today_close, mu, sig_s, t1, Z[0.50]),
+            "module3_t1_p75": gbm_quantile(today_close, mu, sig_s, t1, Z[0.75]),
+            "module3_t1_p95": gbm_quantile(today_close, mu, sig_s, t1, Z[0.95]),
 
-        "module5_m6_p05": gbm_quantile(today_close, mu, sig_l, m6, Z[0.05]),
-        "module5_m6_p25": gbm_quantile(today_close, mu, sig_l, m6, Z[0.25]),
-        "module5_m6_p50": gbm_quantile(today_close, mu, sig_l, m6, Z[0.50]),
-        "module5_m6_p75": gbm_quantile(today_close, mu, sig_l, m6, Z[0.75]),
-        "module5_m6_p95": gbm_quantile(today_close, mu, sig_l, m6, Z[0.95]),
+            "module4_m1_p05": gbm_quantile(today_close, mu, sig_m, m1, Z[0.05]),
+            "module4_m1_p25": gbm_quantile(today_close, mu, sig_m, m1, Z[0.25]),
+            "module4_m1_p50": gbm_quantile(today_close, mu, sig_m, m1, Z[0.50]),
+            "module4_m1_p75": gbm_quantile(today_close, mu, sig_m, m1, Z[0.75]),
+            "module4_m1_p95": gbm_quantile(today_close, mu, sig_m, m1, Z[0.95]),
 
-        "mu_base": mu,
-        "sigma_short": sig_s,
-        "sigma_mid": sig_m,
-        "sigma_long": sig_l,
-        "enable_volume_factor": bool(state["enable_volume_factor"]),
-        "enable_beta_anchor": bool(state["enable_beta_anchor"]),
-        "run_id": state.get("last_run_id", ""),
-        "model_version": MODEL_VERSION,
-    }
-    return out
+            "module5_m6_p05": gbm_quantile(today_close, mu, sig_l, m6, Z[0.05]),
+            "module5_m6_p25": gbm_quantile(today_close, mu, sig_l, m6, Z[0.25]),
+            "module5_m6_p50": gbm_quantile(today_close, mu, sig_l, m6, Z[0.50]),
+            "module5_m6_p75": gbm_quantile(today_close, mu, sig_l, m6, Z[0.75]),
+            "module5_m6_p95": gbm_quantile(today_close, mu, sig_l, m6, Z[0.95]),
 
-def maybe_self_learn_and_update_state(
+            "mu_base": mu,
+            "sigma_short": sig_s,
+            "sigma_mid": sig_m,
+            "sigma_long": sig_l,
+            "enable_volume_factor": bool(state["enable_volume_factor"]),
+            "enable_beta_anchor": bool(state["enable_beta_anchor"]),
+            "run_id": state.get("last_run_id", ""),
+            "model_version": MODEL_VERSION,
+        }
+
+        return out
+    
+    def maybe_self_learn_and_update_state(
     state: Dict[str, Any],
     today_trade_date: str,
     today_close: float,
