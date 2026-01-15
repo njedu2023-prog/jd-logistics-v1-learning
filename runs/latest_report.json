@@ -3,7 +3,7 @@
   "symbol": "02618.HK",
   "trade_date": "",
   "generated_at_bjt": "",
-  "report_reason": "尚未生成法定报告：请先补齐数据源字段 trade_date / amount_yi_hkd 或允许失败版报告输出。",
+  "report_reason": "占位法定报告：当前执行失败（缺 trade_date / amount_yi_hkd），但界面已按“法定界面优先”输出。",
   "module_1_market": {},
   "module_2_yesterday_review": {},
   "module_3_t1_distribution": [],
