@@ -1,0 +1,52 @@
+{
+  "meta": {
+    "project": "JD Logistics V1.0",
+    "symbol": "02618.HK",
+    "source": "manual_bootstrap",
+    "note": "This is an initial placeholder file so the workflow can run. The executor should overwrite/update it later.",
+    "generated_at": "2026-01-15T00:00:00+08:00",
+    "version": "1.0"
+  },
+  "market": {
+    "symbol": "02618.HK",
+    "asof_date": "2026-01-15",
+    "timezone": "Asia/Shanghai",
+    "currency": "HKD",
+    "price": null,
+    "open": null,
+    "high": null,
+    "low": null,
+    "prev_close": null,
+    "volume": null,
+    "turnover": null
+  },
+  "features": {
+    "returns": {
+      "r_1d": null,
+      "r_5d": null,
+      "r_20d": null
+    },
+    "volatility": {
+      "vol_20d": null
+    },
+    "trend": {
+      "ma_5": null,
+      "ma_10": null,
+      "ma_20": null
+    }
+  },
+  "prediction": {
+    "horizon": "next_trading_day",
+    "direction": null,
+    "confidence": null,
+    "expected_return": null,
+    "model": "v1",
+    "reason": []
+  },
+  "evaluation": {
+    "last_eval_date": null,
+    "hit_rate_20d": null,
+    "mse_20d": null,
+    "notes": ""
+  }
+}
