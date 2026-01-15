@@ -1,646 +1,600 @@
 # -*- coding: utf-8 -*-
 """
-京东物流 V1.0 —— 完整预测执行器（GitHub闭环版）
-流程：
-1) 读取 state/model_state.json
-2) 拉取唯一主源的“收盘后真实数据”（方案A阻塞式重试）
-3) 写入 market/market_daily.jsonl
-4) 生成预测 -> 写入 predictions/pred_daily.jsonl
-5) 评估昨日预测 -> 写入 evaluation/eval_daily.jsonl（拿不到则写 null + 原因）
-6) 自学习：根据评估与昨日/今日数据更新 mu/sigma（有数据才更新）-> 写入 learning/param_updates.jsonl
-7) 覆盖写 state/model_state.json
-8) 输出“全模块报告”到 stdout，并写入 reports/latest_report.md（便于留痕）
+JD Logistics V1.0 - Executor (runnable baseline)
+- 目的：先把 GitHub Actions 执行链路跑通，修复缩进/函数块错误
+- 数据源：GitHub Raw JSON（模块①当日真实交易数据）
+- 输出：run_log / eval / updates / pred_daily / state / report
 """
 
-import os
 import json
-import math
+import os
+import sys
 import time
 import uuid
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional, List, Tuple
+import math
+import hashlib
+import datetime as dt
+from typing import Any, Dict, List, Optional, Tuple
 
-# ---------- 常量 ----------
+try:
+    import requests
+except Exception:
+    requests = None
+
+
+# =========================
+# 固定配置（按你当前冻结规则）
+# =========================
 MODEL_VERSION = "V1.0"
-SYMBOL = os.getenv("SYMBOL", "02618.HK")
+SYMBOL = "02618.HK"
 
-# 唯一主源URL（你可在 Actions env 改）
-DATA_SOURCE_URL = os.getenv(
-    "DATA_SOURCE_URL",
-    "https://raw.githubusercontent.com/njedu2023-prog/xiaomi-data/main/jd-logistics-latest.json"
-)
+# 模块①唯一数据源（你已锁定）
+MARKET_URL = "https://raw.githubusercontent.com/njedu2023-prog/xiaomi-data/main/jd-logistics-latest.json"
 
-# 方案A：阻塞式重试（默认 0s, 300s, 300s）
-RETRY_DELAYS = [0, 300, 300]
-
-# 文件路径
+# 输出路径（仓库内）
 RUN_LOG_PATH = "runs/run_log.jsonl"
-MARKET_PATH = "market/market_daily.jsonl"
+EVAL_PATH = "evaluation/eval.jsonl"
+UPD_PATH = "learning/updates.jsonl"
 PRED_PATH = "predictions/pred_daily.jsonl"
-EVAL_PATH = "evaluation/eval_daily.jsonl"
-UPD_PATH = "learning/param_updates.jsonl"
 STATE_PATH = "state/model_state.json"
-REPORT_PATH = "reports/latest_report.md"
+REPORT_PATH = "report_latest.md"
 
-# 正态分位 z 值（5/25/50/75/95）
-Z = {
-    0.05: -1.6448536269514722,
-    0.25: -0.6744897501960817,
-    0.50:  0.0,
-    0.75:  0.6744897501960817,
-    0.95:  1.6448536269514722,
-}
+# 抓取策略：方案A（有限次阻塞重试）
+RETRY_MAX = 12           # 最多重试次数
+RETRY_SLEEP_SEC = 10     # 每次间隔秒数
+HTTP_TIMEOUT = 15
 
-# 交易日年化：252
-TRADING_DAYS = 252.0
 
-# ---------- 工具 ----------
+# =========================
+# 基础工具
+# =========================
+def now_bjt() -> dt.datetime:
+    return dt.datetime.utcnow() + dt.timedelta(hours=8)
+
 def now_bjt_iso() -> str:
-    # 北京时间 UTC+8
-    bjt = timezone(timedelta(hours=8))
-    return datetime.now(tz=bjt).isoformat(timespec="seconds")
-
-def bjt_date_str() -> str:
-    bjt = timezone(timedelta(hours=8))
-    return datetime.now(tz=bjt).strftime("%Y-%m-%d")
+    return now_bjt().replace(microsecond=0).isoformat()
 
 def ensure_dir_for_file(path: str) -> None:
     d = os.path.dirname(path)
     if d and not os.path.exists(d):
         os.makedirs(d, exist_ok=True)
 
+def read_json(path: str, default: Any = None) -> Any:
+    if not os.path.exists(path):
+        return default
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def save_json(path: str, obj: Any) -> None:
+    ensure_dir_for_file(path)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(obj, f, ensure_ascii=False, indent=2)
+
 def append_jsonl(path: str, obj: Dict[str, Any]) -> None:
     ensure_dir_for_file(path)
     with open(path, "a", encoding="utf-8") as f:
         f.write(json.dumps(obj, ensure_ascii=False) + "\n")
 
-def read_jsonl(path: str) -> List[Dict[str, Any]]:
+def sha1_of_text(s: str) -> str:
+    return hashlib.sha1(s.encode("utf-8")).hexdigest()
+
+def safe_float(x: Any, default: Optional[float] = None) -> Optional[float]:
+    try:
+        if x is None:
+            return default
+        return float(x)
+    except Exception:
+        return default
+
+def safe_int(x: Any, default: Optional[int] = None) -> Optional[int]:
+    try:
+        if x is None:
+            return default
+        return int(float(x))
+    except Exception:
+        return default
+
+def pct(a: float, b: float) -> float:
+    # 误差百分比 abs(a-b)/b *100，b=0 时避免除零
+    if b == 0:
+        return 0.0
+    return abs(a - b) / abs(b) * 100.0
+
+
+# =========================
+# 数据抓取（方案A阻塞重试）
+# =========================
+def http_get_text(url: str) -> str:
+    if requests is None:
+        raise RuntimeError("requests 未安装。请在 requirements.txt 里加入 requests。")
+    r = requests.get(url, timeout=HTTP_TIMEOUT)
+    r.raise_for_status()
+    return r.text
+
+def fetch_market_row_blocking(url: str) -> Tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
+    """
+    按方案A：有限次阻塞重试；成功返回 market_row；失败返回 None
+    """
+    diag = {
+        "source_url": url,
+        "attempts": 0,
+        "ok": False,
+        "last_error": None,
+    }
+    for i in range(1, RETRY_MAX + 1):
+        diag["attempts"] = i
+        try:
+            txt = http_get_text(url)
+            market = json.loads(txt)
+            # 基本字段校验（不推断、不回填）
+            required = ["trade_date", "open", "high", "low", "close", "volume", "amount_yi_hkd"]
+            missing = [k for k in required if k not in market]
+            if missing:
+                raise ValueError(f"JSON缺字段: {missing}")
+
+            # 强制类型
+            market_row = {
+                "trade_date": str(market["trade_date"]),
+                "open": float(market["open"]),
+                "high": float(market["high"]),
+                "low": float(market["low"]),
+                "close": float(market["close"]),
+                "volume": int(float(market["volume"])),
+                "amount_yi_hkd": float(market["amount_yi_hkd"]),
+                "source": "github_raw_json",
+                "source_url": url,
+                "fetched_at_bjt": now_bjt_iso(),
+                "raw_sha1": sha1_of_text(txt),
+            }
+            diag["ok"] = True
+            return market_row, diag
+        except Exception as e:
+            diag["last_error"] = str(e)
+            time.sleep(RETRY_SLEEP_SEC)
+
+    return None, diag
+
+
+# =========================
+# 状态/学习（最小可跑通版）
+# =========================
+def default_state() -> Dict[str, Any]:
+    return {
+        "model_version": MODEL_VERSION,
+        "created_at_bjt": now_bjt_iso(),
+        "updated_at_bjt": now_bjt_iso(),
+        # 简化参数：波动估计（可被自学习更新）
+        "sigma_base": 0.035,     # 3.5% 作为初始波动
+        "mu_base": 0.0,          # 漂移先置 0（合规保守）
+        # 记录最近一次收盘（用于回顾）
+        "last_close": None,
+        "last_trade_date": None,
+    }
+
+def load_state() -> Dict[str, Any]:
+    st = read_json(STATE_PATH, default=None)
+    if not isinstance(st, dict):
+        st = default_state()
+        save_json(STATE_PATH, st)
+    # 兼容缺字段
+    for k, v in default_state().items():
+        if k not in st:
+            st[k] = v
+    return st
+
+def maybe_self_learn_and_update_state(
+    state: Dict[str, Any],
+    today_trade_date: str,
+    today_close: float,
+    eval_row: Dict[str, Any],
+    run_id: str
+) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+    """
+    最小学习：用今日相对误差来轻微调整 sigma_base（不做激进更新）
+    有 eval_row 才更新；否则不更新
+    """
+    updates: List[Dict[str, Any]] = []
+    try:
+        rel_err = safe_float(eval_row.get("rel_error_pct"), None)
+        if rel_err is None:
+            return state, updates
+
+        old_sigma = float(state.get("sigma_base", 0.035))
+        # 用误差对 sigma 做一个很小的 EMA 修正（仅保底）
+        # 把误差%转成比例
+        err = max(0.0, rel_err / 100.0)
+        new_sigma = 0.9 * old_sigma + 0.1 * max(0.01, min(0.20, err))
+        state["sigma_base"] = float(new_sigma)
+
+        upd = {
+            "update_time_bjt": now_bjt_iso(),
+            "run_id": run_id,
+            "model_version": MODEL_VERSION,
+            "type": "self_learn_sigma",
+            "today_trade_date": today_trade_date,
+            "old_sigma_base": old_sigma,
+            "new_sigma_base": float(new_sigma),
+            "note": "最小自学习：用今日预测误差对sigma做轻微EMA校准（保底实现）"
+        }
+        updates.append(upd)
+    except Exception:
+        # 学习失败不影响主流程
+        pass
+
+    return state, updates
+
+
+# =========================
+# 预测（最小可跑通版）
+# =========================
+def normal_quantile(p: float) -> float:
+    """
+    近似标准正态分位数（无需 scipy）
+    使用 Peter J. Acklam 近似（简化实现）
+    """
+    # 边界
+    p = min(max(p, 1e-10), 1 - 1e-10)
+    # 系数（Acklam）
+    a = [-3.969683028665376e+01,  2.209460984245205e+02, -2.759285104469687e+02,
+          1.383577518672690e+02, -3.066479806614716e+01,  2.506628277459239e+00]
+    b = [-5.447609879822406e+01,  1.615858368580409e+02, -1.556989798598866e+02,
+          6.680131188771972e+01, -1.328068155288572e+01]
+    c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00,
+         -2.549732539343734e+00,  4.374664141464968e+00,  2.938163982698783e+00]
+    d = [ 7.784695709041462e-03,  3.224671290700398e-01,  2.445134137142996e+00,
+          3.754408661907416e+00]
+    plow = 0.02425
+    phigh = 1 - plow
+    if p < plow:
+        q = math.sqrt(-2*math.log(p))
+        return (((((c[0]*q + c[1])*q + c[2])*q + c[3])*q + c[4])*q + c[5]) / \
+               ((((d[0]*q + d[1])*q + d[2])*q + d[3])*q + 1)
+    if p > phigh:
+        q = math.sqrt(-2*math.log(1-p))
+        return -(((((c[0]*q + c[1])*q + c[2])*q + c[3])*q + c[4])*q + c[5]) / \
+                 ((((d[0]*q + d[1])*q + d[2])*q + d[3])*q + 1)
+    q = p - 0.5
+    r = q*q
+    return (((((a[0]*r + a[1])*r + a[2])*r + a[3])*r + a[4])*r + a[5])*q / \
+           (((((b[0]*r + b[1])*r + b[2])*r + b[3])*r + b[4])*r + 1)
+
+def make_predictions(state: Dict[str, Any], spot_close: float, target_trade_date: str) -> Dict[str, Any]:
+    """
+    生成分位点预测：T+1 / 1个月 / 6个月（最小可跑通版）
+    """
+    sigma = float(state.get("sigma_base", 0.035))
+    mu = float(state.get("mu_base", 0.0))
+
+    # 时间尺度（近似交易日）
+    t1 = 1/252
+    t1m = 21/252
+    t6m = 126/252
+
+    def q_price(t: float, p: float) -> float:
+        z = normal_quantile(p)
+        # 简化：对数正态
+        return float(spot_close * math.exp((mu - 0.5*sigma*sigma)*t + sigma*math.sqrt(t)*z))
+
+    pred = {
+        "pred_date": target_trade_date,
+        "symbol": SYMBOL,
+        "model_version": MODEL_VERSION,
+        "sigma_base": sigma,
+        "mu_base": mu,
+        # 开关（保持字段以兼容你之前结构）
+        "enable_volume_factor": False,
+        "enable_beta_anchor": False,
+
+        # T+1
+        "module3_t1_p05": q_price(t1, 0.05),
+        "module3_t1_p25": q_price(t1, 0.25),
+        "module3_t1_p50": q_price(t1, 0.50),
+        "module3_t1_p75": q_price(t1, 0.75),
+        "module3_t1_p95": q_price(t1, 0.95),
+
+        # 1个月
+        "module4_1m_p05": q_price(t1m, 0.05),
+        "module4_1m_p25": q_price(t1m, 0.25),
+        "module4_1m_p50": q_price(t1m, 0.50),
+        "module4_1m_p75": q_price(t1m, 0.75),
+        "module4_1m_p95": q_price(t1m, 0.95),
+
+        # 6个月
+        "module5_6m_p05": q_price(t6m, 0.05),
+        "module5_6m_p25": q_price(t6m, 0.25),
+        "module5_6m_p50": q_price(t6m, 0.50),
+        "module5_6m_p75": q_price(t6m, 0.75),
+        "module5_6m_p95": q_price(t6m, 0.95),
+
+        "generated_at_bjt": now_bjt_iso(),
+    }
+    return pred
+
+
+# =========================
+# 评估（昨日预测回顾）
+# =========================
+def load_last_pred_from_jsonl(path: str) -> Optional[Dict[str, Any]]:
     if not os.path.exists(path):
-        return []
-    out = []
+        return None
+    # 取最后一行
+    last = None
     with open(path, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if not line:
                 continue
-            out.append(json.loads(line))
-    return out
+            try:
+                last = json.loads(line)
+            except Exception:
+                continue
+    return last
 
-def load_json(path: str) -> Optional[Dict[str, Any]]:
-    if not os.path.exists(path):
-        return None
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+def calc_hit_band(actual: float, p25: float, p75: float) -> str:
+    if actual < p25:
+        return "LOW(<P25)"
+    if actual > p75:
+        return "HIGH(>P75)"
+    return "MID(P25~P75)"
 
-def save_json(path: str, obj: Dict[str, Any]) -> None:
-    ensure_dir_for_file(path)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(obj, f, ensure_ascii=False, indent=2)
-
-def clamp(x: float, lo: float, hi: float) -> Tuple[float, bool]:
-    if x < lo:
-        return lo, True
-    if x > hi:
-        return hi, True
-    return x, False
-
-def gbm_quantile(s0: float, mu: float, sigma: float, t_years: float, z: float) -> float:
-    # S = S0 * exp((mu - 0.5*sigma^2)*t + sigma*sqrt(t)*z)
-    return s0 * math.exp((mu - 0.5 * sigma * sigma) * t_years + sigma * math.sqrt(t_years) * z)
-
-def calc_hit_band(actual: float, p05: float, p25: float, p50: float, p75: float, p95: float) -> str:
-    if actual <= p05:
-        return "<=P05"
-    if actual <= p25:
-        return "P05-P25"
-    if actual <= p50:
-        return "P25-P50"
-    if actual <= p75:
-        return "P50-P75"
-    if actual <= p95:
-        return "P75-P95"
-    return ">=P95"
-
-# ---------- 主源数据抓取 ----------
-def fetch_market_json_with_retry(url: str) -> Tuple[Optional[Dict[str, Any]], int, Optional[str]]:
-    import requests  # requirements.txt
-
-    last_err = None
-    retries = 0
-
-    for i, d in enumerate(RETRY_DELAYS):
-        if d > 0:
-            time.sleep(d)
-        try:
-            r = requests.get(url, timeout=20)
-            if r.status_code != 200:
-                raise RuntimeError(f"HTTP {r.status_code}")
-            data = r.json()
-            return data, retries, None
-        except Exception as e:
-            last_err = repr(e)
-            if i < len(RETRY_DELAYS) - 1:
-                retries += 1
-            continue
-
-    return None, retries, last_err
-
-def parse_market_payload(payload: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+def build_eval_row(
+    market_row: Dict[str, Any],
+    last_pred: Optional[Dict[str, Any]],
+    run_id: str
+) -> Dict[str, Any]:
     """
-    你主源 jd-logistics-latest.json 字段未知时：只做“兼容映射”，拿不到就返回原因（不编）。
-    期望最少：trade_date + close + volume + amount_hkd（或 amount）
+    若没有昨日预测缓存，则 eval 用 null，并标注 reason，不做伪造回填
     """
-    def pick(*keys):
-        for k in keys:
-            if k in payload:
-                return payload[k]
-        return None
+    target_trade_date = str(market_row["trade_date"])
+    actual_close = float(market_row["close"])
 
-    trade_date = pick("trade_date", "date", "tradeDate", "日期")
-    open_ = pick("open", "open_price", "开盘", "Open")
-    high = pick("high", "high_price", "最高", "High")
-    low  = pick("low", "low_price", "最低", "Low")
-    close = pick("close", "close_price", "收盘", "Close")
-    volume = pick("volume", "vol", "成交量", "Volume")
-    amount = pick("amount_hkd", "amount", "成交额", "Turnover")
-    source_ts = pick("source_timestamp_bjt", "timestamp_bjt", "timestamp", "数据时间")
-
-    # 基础校验
-    if trade_date is None:
-        return None, "主源缺少 trade_date/date 字段"
-    if close is None:
-        return None, "主源缺少 close/收盘 字段"
-    if volume is None:
-        return None, "主源缺少 volume/成交量 字段"
-    if amount is None:
-        return None, "主源缺少 amount/成交额 字段"
-
-    try:
-        close_f = float(close)
-        vol_i = int(float(volume))
-        amt_i = int(float(amount))
-    except Exception:
-        return None, "主源字段类型无法解析为数值（close/volume/amount）"
-
-    # open/high/low 允许缺失，但若存在则解析
-    def to_float_or_none(x):
-        if x is None or x == "":
-            return None
-        try:
-            return float(x)
-        except Exception:
-            return None
-
-    open_f = to_float_or_none(open_)
-    high_f = to_float_or_none(high)
-    low_f  = to_float_or_none(low)
-
-    # integrity：只做不编的逻辑自检
-    integrity_ok = True
-    integrity_note = None
-    if open_f is not None and high_f is not None and low_f is not None:
-        if not (low_f <= open_f <= high_f):
-            integrity_ok = False
-            integrity_note = "OHLC自检失败：open不在[low,high]内"
-    if high_f is not None and low_f is not None:
-        if not (low_f <= close_f <= high_f):
-            integrity_ok = False
-            integrity_note = "OHLC自检失败：close不在[low,high]内"
-    if close_f <= 0:
-        integrity_ok = False
-        integrity_note = "收盘价<=0"
-
-    amount_yi = amt_i / 1e8
-
-    record = {
-        "trade_date": str(trade_date),
-        "symbol": SYMBOL,
-        "open": open_f if open_f is not None else None,
-        "high": high_f if high_f is not None else None,
-        "low":  low_f if low_f is not None else None,
-        "close": close_f,
-        "volume": vol_i,
-        "amount_hkd": amt_i,
-        "amount_yi_hkd": amount_yi,
-        "source_url": DATA_SOURCE_URL,
-        "source_timestamp_bjt": str(source_ts) if source_ts is not None else None,
-        "integrity_ok": bool(integrity_ok),
-        "integrity_note": integrity_note,
-        "model_version": MODEL_VERSION,  # 你文档虽然没要求 market_daily 带，但加不影响；如你要严格不加可删
-    }
-    return record, None
-
-# ---------- 预测 / 评估 / 学习 ----------
-def load_or_init_state() -> Dict[str, Any]:
-    st = load_json(STATE_PATH)
-    if st is not None:
-        return st
-
-    # 默认初始化（可按你之前冻结参数改）
-    default = {
-        "model_version": MODEL_VERSION,
-        "symbol": SYMBOL,
-        "last_success_trade_date": "1970-01-01",
-        "last_run_id": "",
-        "mu_base": 0.0,
-        "sigma_short": 0.30,
-        "sigma_mid": 0.35,
-        "sigma_long": 0.40,
-        "enable_volume_factor": True,
-        "enable_beta_anchor": True,
-        "beta_window": 60,
-        "volume_window": 20,
-        "safety_limits": {
-            "mu_min": -1.0,
-            "mu_max":  1.0,
-            "sigma_short_min": 0.05,
-            "sigma_short_max": 1.50,
-            "sigma_mid_min": 0.05,
-            "sigma_mid_max": 1.50,
-            "sigma_long_min": 0.05,
-            "sigma_long_max": 1.50,
-        },
-        "updated_at_bjt": now_bjt_iso()
-    }
-    return default
-
-def find_prev_market_close(trade_date: str) -> Optional[float]:
-    rows = read_jsonl(MARKET_PATH)
-    # 找到严格小于 trade_date 的最近一条
-    candidates = [r for r in rows if r.get("trade_date") and r["trade_date"] < trade_date and r.get("close") is not None]
-    if not candidates:
-        return None
-    candidates.sort(key=lambda x: x["trade_date"])
-    return float(candidates[-1]["close"])
-
-def find_yesterday_pred_for_today(today_trade_date: str) -> Optional[Dict[str, Any]]:
-    preds = read_jsonl(PRED_PATH)
-    # yesterday 预测里：target_trade_date_t1 == today_trade_date
-    cands = [p for p in preds if p.get("target_trade_date_t1") == today_trade_date]
-    if not cands:
-        return None
-    cands.sort(key=lambda x: x.get("pred_date", ""))
-    return cands[-1]
-
-def make_predictions(state: Dict[str, Any], today_close: float, today_trade_date: str) -> Dict[str, Any]:
-    mu_raw = state.get("mu_base")
-
-    # 冷启动兜底值（只在第一次）
-    if mu_raw is None:
-        mu_raw = 0.0
-
-    def build_prediction_output(
-        mu_raw: float,
-        state: Dict[str, Any],
-        today_trade_date: str,
-        today_close: float,
-    ) -> Dict[str, Any]:
-        mu = float(mu_raw)
-        sig_s = float(state["sigma_short"])
-        sig_m = float(state["sigma_mid"])
-        sig_l = float(state["sigma_long"])
-
-        # 时间尺度（年）
-        t1 = 1.0 / TRADING_DAYS
-        m1 = 21.0 / TRADING_DAYS
-        m6 = 126.0 / TRADING_DAYS
-
-        out = {
-            "pred_date": today_trade_date,  # 收盘后生成
-            "target_trade_date_t1": today_trade_date,  # 若有交易日历可替换为 T+1
+    if not last_pred:
+        return {
+            "eval_date": target_trade_date,
+            "target_trade_date": target_trade_date,
             "symbol": SYMBOL,
-
-            "module3_t1_p05": gbm_quantile(today_close, mu, sig_s, t1, Z[0.05]),
-            "module3_t1_p25": gbm_quantile(today_close, mu, sig_s, t1, Z[0.25]),
-            "module3_t1_p50": gbm_quantile(today_close, mu, sig_s, t1, Z[0.50]),
-            "module3_t1_p75": gbm_quantile(today_close, mu, sig_s, t1, Z[0.75]),
-            "module3_t1_p95": gbm_quantile(today_close, mu, sig_s, t1, Z[0.95]),
-
-            "module4_m1_p05": gbm_quantile(today_close, mu, sig_m, m1, Z[0.05]),
-            "module4_m1_p25": gbm_quantile(today_close, mu, sig_m, m1, Z[0.25]),
-            "module4_m1_p50": gbm_quantile(today_close, mu, sig_m, m1, Z[0.50]),
-            "module4_m1_p75": gbm_quantile(today_close, mu, sig_m, m1, Z[0.75]),
-            "module4_m1_p95": gbm_quantile(today_close, mu, sig_m, m1, Z[0.95]),
-
-            "module5_m6_p05": gbm_quantile(today_close, mu, sig_l, m6, Z[0.05]),
-            "module5_m6_p25": gbm_quantile(today_close, mu, sig_l, m6, Z[0.25]),
-            "module5_m6_p50": gbm_quantile(today_close, mu, sig_l, m6, Z[0.50]),
-            "module5_m6_p75": gbm_quantile(today_close, mu, sig_l, m6, Z[0.75]),
-            "module5_m6_p95": gbm_quantile(today_close, mu, sig_l, m6, Z[0.95]),
-
-            "mu_base": mu,
-            "sigma_short": sig_s,
-            "sigma_mid": sig_m,
-            "sigma_long": sig_l,
-            "enable_volume_factor": bool(state["enable_volume_factor"]),
-            "enable_beta_anchor": bool(state["enable_beta_anchor"]),
-            "run_id": state.get("last_run_id", ""),
+            "actual_close": actual_close,
+            "pred_ref_date": None,
+            "pred_median_t1": None,
+            "pred_p25_t1": None,
+            "pred_p75_t1": None,
+            "abs_error": None,
+            "rel_error_pct": None,
+            "hit_band": None,
+            "amount_yi_hkd": float(market_row["amount_yi_hkd"]),
+            "volume_percentile_20d": None,
+            "enable_volume_factor": False,
+            "enable_beta_anchor": False,
+            "run_id": run_id,
             "model_version": MODEL_VERSION,
+            "reason": "未找到昨日预测缓存（predictions/pred_daily.jsonl 为空或不存在），合规：不伪造昨日预测。"
         }
 
-        return out
-    
-    def maybe_self_learn_and_update_state(
-    state: Dict[str, Any],
-    today_trade_date: str,
-    today_close: float,
-    eval_row: Optional[Dict[str, Any]],
-    run_id: str
-) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
-    """
-    简化自学习：仅在具备“昨日close + 今日close + 评估记录”时更新：
-    - mu_base：向“真实日收益年化”做 EWMA 微调
-    - sigma_short：根据相对误差做 EWMA 微调
-    任何缺数据 -> 不更新参数，不写 param_updates
-    """
-    updates = []
-    safety = state["safety_limits"]
+    # 兼容字段名
+    pred_date = last_pred.get("pred_date")
+    pred_median = safe_float(last_pred.get("module3_t1_p50"), None)
+    pred_p25 = safe_float(last_pred.get("module3_t1_p25"), None)
+    pred_p75 = safe_float(last_pred.get("module3_t1_p75"), None)
 
-    prev_close = find_prev_market_close(today_trade_date)
-    if prev_close is None:
-        return state, updates
-    if eval_row is None or eval_row.get("rel_error_pct") is None:
-        return state, updates
-
-    # 真实日对数收益（年化）
-    try:
-        r = math.log(today_close / float(prev_close))
-    except Exception:
-        return state, updates
-
-    realized_mu_annual = r * TRADING_DAYS
-    old_mu = float(state["mu_base"])
-    new_mu_raw = 0.90 * old_mu + 0.10 * realized_mu_annual
-
-    new_mu, clamped_mu = clamp(new_mu_raw, float(safety["mu_min"]), float(safety["mu_max"]))
-    if new_mu != old_mu:
-        updates.append({
-            "update_id": str(uuid.uuid4()),
-            "update_date": today_trade_date,
+    if pred_median is None or pred_p25 is None or pred_p75 is None:
+        return {
+            "eval_date": target_trade_date,
+            "target_trade_date": target_trade_date,
             "symbol": SYMBOL,
-            "param_name": "mu_base",
-            "old_value": old_mu,
-            "new_value": new_mu,
-            "delta": new_mu - old_mu,
-            "trigger_metric": "rel_error_pct",
-            "trigger_window": "last_1_trading_day",
-            "trigger_rule": "EWMA(0.9*old + 0.1*realized_mu_annual)，并受 safety_limits 钳制",
-            "evidence_ref": f"{eval_row.get('eval_date')}|{eval_row.get('target_trade_date')}",
-            "safety_clamp_applied": bool(clamped_mu),
-            "model_version": MODEL_VERSION
-        })
+            "actual_close": actual_close,
+            "pred_ref_date": pred_date,
+            "pred_median_t1": pred_median,
+            "pred_p25_t1": pred_p25,
+            "pred_p75_t1": pred_p75,
+            "abs_error": None,
+            "rel_error_pct": None,
+            "hit_band": None,
+            "amount_yi_hkd": float(market_row["amount_yi_hkd"]),
+            "volume_percentile_20d": None,
+            "enable_volume_factor": bool(last_pred.get("enable_volume_factor", False)),
+            "enable_beta_anchor": bool(last_pred.get("enable_beta_anchor", False)),
+            "run_id": run_id,
+            "model_version": MODEL_VERSION,
+            "reason": "昨日预测记录缺少关键分位字段，合规：不计算误差。"
+        }
 
-    # sigma_short 用相对误差作微调（示例规则：误差越大，sigma 轻微上调；误差很小则轻微下调）
-    rel_err = float(eval_row["rel_error_pct"])
-    old_sig = float(state["sigma_short"])
-    target_sig = max(0.05, min(1.5, old_sig * (1.0 + (rel_err - 0.01))))  # 0.01 视为“正常”基准
-    new_sig_raw = 0.90 * old_sig + 0.10 * target_sig
+    abs_error = abs(actual_close - pred_median)
+    rel_error = pct(actual_close, pred_median)
+    hit_band = calc_hit_band(actual_close, pred_p25, pred_p75)
 
-    new_sig, clamped_sig = clamp(new_sig_raw, float(safety["sigma_short_min"]), float(safety["sigma_short_max"]))
-    if new_sig != old_sig:
-        updates.append({
-            "update_id": str(uuid.uuid4()),
-            "update_date": today_trade_date,
-            "symbol": SYMBOL,
-            "param_name": "sigma_short",
-            "old_value": old_sig,
-            "new_value": new_sig,
-            "delta": new_sig - old_sig,
-            "trigger_metric": "rel_error_pct",
-            "trigger_window": "last_1_trading_day",
-            "trigger_rule": "EWMA(0.9*old + 0.1*target_sigma_from_error)，并受 safety_limits 钳制",
-            "evidence_ref": f"{eval_row.get('eval_date')}|{eval_row.get('target_trade_date')}",
-            "safety_clamp_applied": bool(clamped_sig),
-            "model_version": MODEL_VERSION
-        })
+    return {
+        "eval_date": target_trade_date,
+        "target_trade_date": target_trade_date,
+        "symbol": SYMBOL,
+        "actual_close": actual_close,
+        "pred_ref_date": pred_date,
+        "pred_median_t1": float(pred_median),
+        "pred_p25_t1": float(pred_p25),
+        "pred_p75_t1": float(pred_p75),
+        "abs_error": float(abs_error),
+        "rel_error_pct": float(rel_error),
+        "hit_band": hit_band,
+        "amount_yi_hkd": float(market_row["amount_yi_hkd"]),
+        "volume_percentile_20d": None,
+        "enable_volume_factor": bool(last_pred.get("enable_volume_factor", False)),
+        "enable_beta_anchor": bool(last_pred.get("enable_beta_anchor", False)),
+        "run_id": run_id,
+        "model_version": MODEL_VERSION
+    }
 
-    # 应用更新
-    if updates:
-        state["mu_base"] = new_mu
-        state["sigma_short"] = new_sig
 
-    return state, updates
-
-# ---------- 报告 ----------
-def fmt(x: Any, nd: int = 3) -> str:
+# =========================
+# 报告（简单可读版，先保证输出）
+# =========================
+def fmt2(x: Any) -> str:
     if x is None:
-        return "null"
-    if isinstance(x, (int,)):
+        return "—"
+    try:
+        return f"{float(x):.3f}"
+    except Exception:
         return str(x)
-    if isinstance(x, float):
-        return f"{x:.{nd}f}"
-    return str(x)
 
 def build_report(
-    market_row: Optional[Dict[str, Any]],
-    eval_row: Optional[Dict[str, Any]],
-    pred_row: Optional[Dict[str, Any]],
+    market_row: Dict[str, Any],
+    eval_row: Dict[str, Any],
+    pred_row: Dict[str, Any],
     state: Dict[str, Any],
     run_log: Dict[str, Any],
     param_updates: List[Dict[str, Any]]
 ) -> str:
-    lines = []
-    lines.append(f"# 京东物流 V1.0 全模块报告（{bjt_date_str()}）")
+    d = market_row["trade_date"]
+    lines: List[str] = []
+    lines.append(f"# 京东物流 V1.0 预测报告（{d}）")
     lines.append("")
-    lines.append(f"- run_id: {run_log.get('run_id')}")
-    lines.append(f"- trigger_time_bjt: {run_log.get('trigger_time_bjt')}")
-    lines.append(f"- data_source_url: {run_log.get('data_source_url')}")
-    lines.append(f"- fetch_status: {run_log.get('fetch_status')} (retries={run_log.get('fetch_retries')})")
+    lines.append(f"- 版本：{MODEL_VERSION}")
+    lines.append(f"- 运行时间（BJT）：{now_bjt_iso()}")
+    lines.append(f"- RunID：{run_log.get('run_id')}")
     lines.append("")
 
     # ① 当日实际交易数据
     lines.append("## ① 当日实际交易数据")
-    if market_row is None:
-        lines.append("- 数据不可用（已按方案A重试）")
-    else:
-        lines.append(f"- 交易日：{market_row.get('trade_date')}")
-        lines.append(f"- 开盘：{fmt(market_row.get('open'))} HKD")
-        lines.append(f"- 最高：{fmt(market_row.get('high'))} HKD")
-        lines.append(f"- 最低：{fmt(market_row.get('low'))} HKD")
-        lines.append(f"- 收盘：{fmt(market_row.get('close'))} HKD")
-        lines.append(f"- 成交量：{fmt(market_row.get('volume'))} 股")
-        lines.append(f"- 成交额：{fmt(market_row.get('amount_yi_hkd'))}（亿港元）")
-        lines.append(f"- 数据来源：{market_row.get('source_url')}")
-        lines.append(f"- 自检：integrity_ok={market_row.get('integrity_ok')} note={market_row.get('integrity_note')}")
+    lines.append(f"- 交易日：{market_row['trade_date']}")
+    lines.append(f"- 开盘价：{fmt2(market_row['open'])}")
+    lines.append(f"- 最高价：{fmt2(market_row['high'])}")
+    lines.append(f"- 最低价：{fmt2(market_row['low'])}")
+    lines.append(f"- 收盘价：{fmt2(market_row['close'])}")
+    lines.append(f"- 成交量：{market_row['volume']}")
+    lines.append(f"- 成交额：{fmt2(market_row['amount_yi_hkd'])}（亿港元）")
+    lines.append(f"- 数据源：GitHub Raw JSON（锁定）")
     lines.append("")
 
     # ② 昨日预测回顾
     lines.append("## ② 昨日预测回顾")
-    if eval_row is None:
-        lines.append("- 无法评估：缺少“昨日对今日的预测记录”或字段不足（按规则不编，已写入 eval_daily 为 null/跳过）")
+    if eval_row.get("pred_ref_date") is None:
+        lines.append(f"- 状态：无昨日预测缓存（合规：不伪造）")
+        lines.append(f"- 说明：{eval_row.get('reason')}")
     else:
-        lines.append(f"- 今日实际收盘：{fmt(eval_row.get('actual_close'))}")
-        lines.append(f"- 昨日T+1中位预测：{fmt(eval_row.get('pred_median_t1'))}")
-        lines.append(f"- 误差：abs={fmt(eval_row.get('abs_error'))}, rel={fmt(eval_row.get('rel_error_pct'), 4)}")
+        lines.append(f"- 昨日预测日期：{eval_row.get('pred_ref_date')}")
+        lines.append(f"- 昨日预测中位价（T+1）：{fmt2(eval_row.get('pred_median_t1'))}")
+        lines.append(f"- 今日实际收盘价：{fmt2(eval_row.get('actual_close'))}")
+        lines.append(f"- 绝对误差：{fmt2(eval_row.get('abs_error'))}")
+        lines.append(f"- 相对误差：{fmt2(eval_row.get('rel_error_pct'))}%")
         lines.append(f"- 命中区间：{eval_row.get('hit_band')}")
     lines.append("")
 
-    # ③ 次日价格分布预测（T+1）
+    # ③ 次日价格分布预测
     lines.append("## ③ 次日价格分布预测（T+1）")
-    if pred_row is None:
-        lines.append("- 无预测（因当日真实数据不可用）")
-    else:
-        lines.append(f"- P05 {fmt(pred_row.get('module3_t1_p05'))} | P25 {fmt(pred_row.get('module3_t1_p25'))} | P50 {fmt(pred_row.get('module3_t1_p50'))} | P75 {fmt(pred_row.get('module3_t1_p75'))} | P95 {fmt(pred_row.get('module3_t1_p95'))}")
+    lines.append(f"- P05：{fmt2(pred_row['module3_t1_p05'])}")
+    lines.append(f"- P25：{fmt2(pred_row['module3_t1_p25'])}")
+    lines.append(f"- P50：{fmt2(pred_row['module3_t1_p50'])}")
+    lines.append(f"- P75：{fmt2(pred_row['module3_t1_p75'])}")
+    lines.append(f"- P95：{fmt2(pred_row['module3_t1_p95'])}")
     lines.append("")
 
-    # ④ 未来1个月价格分布预测
+    # ④ 未来1个月
     lines.append("## ④ 未来1个月价格分布预测")
-    if pred_row is None:
-        lines.append("- 无预测（因当日真实数据不可用）")
-    else:
-        lines.append(f"- P05 {fmt(pred_row.get('module4_m1_p05'))} | P25 {fmt(pred_row.get('module4_m1_p25'))} | P50 {fmt(pred_row.get('module4_m1_p50'))} | P75 {fmt(pred_row.get('module4_m1_p75'))} | P95 {fmt(pred_row.get('module4_m1_p95'))}")
+    lines.append(f"- P05：{fmt2(pred_row['module4_1m_p05'])}")
+    lines.append(f"- P25：{fmt2(pred_row['module4_1m_p25'])}")
+    lines.append(f"- P50：{fmt2(pred_row['module4_1m_p50'])}")
+    lines.append(f"- P75：{fmt2(pred_row['module4_1m_p75'])}")
+    lines.append(f"- P95：{fmt2(pred_row['module4_1m_p95'])}")
     lines.append("")
 
-    # ⑤ 未来6个月价格分布预测
+    # ⑤ 未来6个月
     lines.append("## ⑤ 未来6个月价格分布预测")
-    if pred_row is None:
-        lines.append("- 无预测（因当日真实数据不可用）")
-    else:
-        lines.append(f"- P05 {fmt(pred_row.get('module5_m6_p05'))} | P25 {fmt(pred_row.get('module5_m6_p25'))} | P50 {fmt(pred_row.get('module5_m6_p50'))} | P75 {fmt(pred_row.get('module5_m6_p75'))} | P95 {fmt(pred_row.get('module5_m6_p95'))}")
+    lines.append(f"- P05：{fmt2(pred_row['module5_6m_p05'])}")
+    lines.append(f"- P25：{fmt2(pred_row['module5_6m_p25'])}")
+    lines.append(f"- P50：{fmt2(pred_row['module5_6m_p50'])}")
+    lines.append(f"- P75：{fmt2(pred_row['module5_6m_p75'])}")
+    lines.append(f"- P95：{fmt2(pred_row['module5_6m_p95'])}")
     lines.append("")
 
     # ⑥ 模型状态与学习更新
     lines.append("## ⑥ 模型状态与学习更新")
-    lines.append(f"- mu_base: {fmt(state.get('mu_base'), 6)}")
-    lines.append(f"- sigma_short/mid/long: {fmt(state.get('sigma_short'), 6)} / {fmt(state.get('sigma_mid'), 6)} / {fmt(state.get('sigma_long'), 6)}")
-    lines.append(f"- enable_volume_factor: {state.get('enable_volume_factor')}, enable_beta_anchor: {state.get('enable_beta_anchor')}")
-    lines.append(f"- last_success_trade_date: {state.get('last_success_trade_date')}")
-    lines.append(f"- updated_at_bjt: {state.get('updated_at_bjt')}")
-    if not param_updates:
-        lines.append("- 本次无参数更新（数据不足或未触发规则）")
+    lines.append(f"- sigma_base：{fmt2(state.get('sigma_base'))}")
+    lines.append(f"- mu_base：{fmt2(state.get('mu_base'))}")
+    if param_updates:
+        lines.append(f"- 本次更新条目：{len(param_updates)}")
+        for u in param_updates[-5:]:
+            lines.append(f"  - {u.get('type')}：{u.get('old_sigma_base')} → {u.get('new_sigma_base')}（{u.get('note')}）")
     else:
-        for u in param_updates:
-            lines.append(f"- 更新 {u['param_name']}: {fmt(u['old_value'],6)} -> {fmt(u['new_value'],6)} (Δ={fmt(u['delta'],6)}) clamp={u['safety_clamp_applied']}")
+        lines.append("- 本次无学习更新（或无昨日预测可回顾）。")
     lines.append("")
 
-    return "\n".join(lines)
-
-# ---------- 主程序 ----------
-def main():
-    run_id = str(uuid.uuid4())
-    trigger_time = now_bjt_iso()
-    target_trade_date = bjt_date_str()
-
-    run_log = {
-        "run_id": run_id,
-        "run_type": os.getenv("RUN_TYPE", "AUTO"),
-        "trigger_time_bjt": trigger_time,
-        "target_trade_date": target_trade_date,
-        "data_source_url": DATA_SOURCE_URL,
-        "fetch_status": "FAILED",
-        "fetch_retries": 0,
-        "fetch_error": None,
-        "report_output_status": "NO_OUTPUT",
-        "report_reason": "",
-        "cache_write_status": "SKIPPED",
-        "cache_error": None,
-        "model_version": MODEL_VERSION
-    }
-
-    state = load_or_init_state()
-    state["last_run_id"] = run_id
-
-    payload, retries, fetch_err = fetch_market_json_with_retry(DATA_SOURCE_URL)
-    run_log["fetch_retries"] = retries
-
-    market_row = None
-    pred_row = None
-    eval_row = None
-    param_updates = []
-
-    if payload is None:
-        run_log["fetch_status"] = "FAILED"
-        run_log["fetch_error"] = fetch_err
-        run_log["report_reason"] = f"主源拉取失败（已按方案A重试）：{fetch_err}"
-        run_log["report_output_status"] = "NO_OUTPUT"
-        # 写 run_log（即使失败也要留痕）
-        append_jsonl(RUN_LOG_PATH, run_log)
-        report = build_report(None, None, None, state, run_log, [])
-        ensure_dir_for_file(REPORT_PATH)
-        with open(REPORT_PATH, "w", encoding="utf-8") as f:
-            f.write(report)
-        print(report)
-        return
-
-    market_row, parse_err = parse_market_payload(payload)
-    if market_row is None:
-        run_log["fetch_status"] = "FAILED"
-        run_log["fetch_error"] = parse_err
-        run_log["report_reason"] = f"主源数据解析失败：{parse_err}"
-        run_log["report_output_status"] = "NO_OUTPUT"
-        append_jsonl(RUN_LOG_PATH, run_log)
-        report = build_report(None, None, None, state, run_log, [])
-        ensure_dir_for_file(REPORT_PATH)
-        with open(REPORT_PATH, "w", encoding="utf-8") as f:
-            f.write(report)
-        print(report)
-        return
-
-    # 用“主源给的交易日”为准，不用本地日期硬推
-    target_trade_date = market_row["trade_date"]
-    run_log["target_trade_date"] = target_trade_date
-    run_log["fetch_status"] = "SUCCESS"
-    run_log["fetch_error"] = None
-
-    # 写 market_daily
-    try:
-        append_jsonl(MARKET_PATH, {k: market_row.get(k) for k in [
-            "trade_date","symbol","open","high","low","close","volume","amount_hkd","amount_yi_hkd",
-            "source_url","source_timestamp_bjt","integrity_ok","integrity_note"
-        ]})
-        run_log["cache_write_status"] = "WROTE"
-        run_log["cache_error"] = None
-        state["last_success_trade_date"] = target_trade_date
-    except Exception as e:
-        run_log["cache_write_status"] = "FAILED"
-        run_log["cache_error"] = repr(e)
-
-    # 评估昨日预测（若存在）
-    ypred = find_yesterday_pred_for_today(target_trade_date)
-    if ypred is not None:
-        actual_close = float(market_row["close"])
-        pred_median = ypred.get("module3_t1_p50")
-        pred_p25 = ypred.get("module3_t1_p25")
-        pred_p75 = ypred.get("module3_t1_p75")
-
-        # abs_error 必填，但如果昨日预测字段缺失，不编：写 null 并说明（这里选择：不写 eval_daily，避免违背必填；你若要强制写，可改成写 null）
-        if pred_median is not None and pred_p25 is not None and pred_p75 is not None:
-            abs_error = abs(float(pred_median) - actual_close)
-            rel_error = abs_error / actual_close if actual_close != 0 else None
-            hit_band = calc_hit_band(
-                actual_close,
-                float(ypred.get("module3_t1_p05")),
-                float(ypred.get("module3_t1_p25")),
-                float(ypred.get("module3_t1_p50")),
-                float(ypred.get("module3_t1_p75")),
-                float(ypred.get("module3_t1_p95")),
+    # ⑦ 过去五个交易日回顾（保底：从 eval.jsonl 取最近5条）
+    lines.append("## ⑦ 过去五个交易日预测命中回顾（最近5条）")
+    rows = load_last_n_jsonl(EVAL_PATH, 5)
+    if not rows:
+        lines.append("- 暂无历史回顾数据。")
+    else:
+        lines.append("| 交易日 | 昨日预测日期 | 预测中位(T+1) | 实际收盘 | 误差% | 命中 |")
+        lines.append("|---|---:|---:|---:|---:|---|")
+        for r in rows:
+            lines.append(
+                f"| {r.get('target_trade_date')} | {r.get('pred_ref_date') or '—'} | "
+                f"{fmt2(r.get('pred_median_t1'))} | {fmt2(r.get('actual_close'))} | "
+                f"{fmt2(r.get('rel_error_pct'))} | {r.get('hit_band') or '—'} |"
             )
 
-            eval_row = {
-                "eval_date": target_trade_date,
-                "target_trade_date": target_trade_date,
-                "symbol": SYMBOL,
-                "actual_close": actual_close,
-                "pred_ref_date": ypred.get("pred_date"),
-                "pred_median_t1": float(pred_median),
-                "pred_p25_t1": float(pred_p25),
-                "pred_p75_t1": float(pred_p75),
-                "abs_error": abs_error,
-                "rel_error_pct": rel_error,
-                "hit_band": hit_band,
-                "amount_yi_hkd": float(market_row["amount_yi_hkd"]),
-                "volume_percentile_20d": None,  # 拿不到就 null（合规）
-                "enable_volume_factor": bool(ypred.get("enable_volume_factor", False)),
-                "enable_beta_anchor": bool(ypred.get("enable_beta_anchor", False)),
-                "run_id": run_id,
-                "model_version": MODEL_VERSION
-            }
-            append_jsonl(EVAL_PATH, eval_row)
+    lines.append("")
+    return "\n".join(lines)
 
-    # 自学习更新（有足够数据才更新）
+def load_last_n_jsonl(path: str, n: int) -> List[Dict[str, Any]]:
+    if not os.path.exists(path):
+        return []
+    buf: List[Dict[str, Any]] = []
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                buf.append(json.loads(line))
+            except Exception:
+                continue
+    return buf[-n:]
+
+
+# =========================
+# 主流程
+# =========================
+def main() -> None:
+    run_id = uuid.uuid4().hex[:16]
+    run_log = {
+        "run_id": run_id,
+        "model_version": MODEL_VERSION,
+        "symbol": SYMBOL,
+        "started_at_bjt": now_bjt_iso(),
+        "market_source": "github_raw_json",
+        "market_url": MARKET_URL,
+        "status": "START",
+        "report_output_status": "PENDING",
+        "report_reason": None,
+    }
+
+    # 1) 拉取当日真实数据（方案A阻塞重试）
+    market_row, diag = fetch_market_row_blocking(MARKET_URL)
+    run_log["market_fetch_diag"] = diag
+
+    if market_row is None:
+        run_log["status"] = "FAIL"
+        run_log["finished_at_bjt"] = now_bjt_iso()
+        run_log["report_output_status"] = "NO_OUTPUT"
+        run_log["report_reason"] = f"当日真实数据不可用（已重试{diag.get('attempts')}次）：{diag.get('last_error')}"
+        append_jsonl(RUN_LOG_PATH, run_log)
+        print(run_log["report_reason"])
+        # 合规：不推断/不回填
+        return
+
+    # 2) 读 state
+    state = load_state()
+
+    # 3) 读昨日预测（用于回顾）
+    last_pred = load_last_pred_from_jsonl(PRED_PATH)
+
+    # 4) 生成 eval（昨日预测回顾）
+    eval_row = build_eval_row(market_row, last_pred, run_id)
+    append_jsonl(EVAL_PATH, eval_row)
+
+    # 5) 自学习更新（有条件才更新）
     state, param_updates = maybe_self_learn_and_update_state(
         state=state,
-        today_trade_date=target_trade_date,
+        today_trade_date=str(market_row["trade_date"]),
         today_close=float(market_row["close"]),
         eval_row=eval_row,
         run_id=run_id
@@ -648,15 +602,20 @@ def main():
     for u in param_updates:
         append_jsonl(UPD_PATH, u)
 
-    # 生成预测并写入 pred_daily
-    pred_row = make_predictions(state, float(market_row["close"]), target_trade_date)
+    # 6) 生成预测并写入 pred_daily
+    pred_row = make_predictions(state, float(market_row["close"]), str(market_row["trade_date"]))
     pred_row["run_id"] = run_id
     append_jsonl(PRED_PATH, pred_row)
 
-    # 覆盖写 state
+    # 7) 更新并保存 state
+    state["last_close"] = float(market_row["close"])
+    state["last_trade_date"] = str(market_row["trade_date"])
     state["updated_at_bjt"] = now_bjt_iso()
     save_json(STATE_PATH, state)
 
+    # 8) 生成报告并写入
+    run_log["status"] = "OK"
+    run_log["finished_at_bjt"] = now_bjt_iso()
     run_log["report_output_status"] = "OUTPUT"
     run_log["report_reason"] = "当日真实数据拉取成功；预测/写入完成。"
     append_jsonl(RUN_LOG_PATH, run_log)
@@ -666,7 +625,9 @@ def main():
     with open(REPORT_PATH, "w", encoding="utf-8") as f:
         f.write(report)
 
+    # Actions 日志输出
     print(report)
+
 
 if __name__ == "__main__":
     main()
