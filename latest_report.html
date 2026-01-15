@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>京东物流 V1.0 法定预测报告</title>
+  <style>
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",Arial;margin:24px;background:#f6f7f9;color:#111}
+    .wrap{max-width:980px;margin:0 auto}
+    .card{background:#fff;border:1px solid #e6e8eb;border-radius:12px;padding:18px;margin:14px 0;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+    h1{font-size:20px;margin:0 0 8px}
+    h2{font-size:16px;margin:0 0 10px}
+    .meta{color:#666;font-size:13px}
+    .bad{background:#fff5f5;border-color:#ffd6d6}
+    .bad .meta{color:#b00020}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th,td{border-bottom:1px solid #eee;padding:8px 6px;text-align:left;vertical-align:top}
+    th{color:#444;font-weight:600;background:#fafafa}
+    .k{color:#666;width:180px}
+    .small{font-size:12px;color:#666;line-height:1.5}
+    .tag{display:inline-block;padding:2px 8px;border-radius:999px;background:#f0f2f5;font-size:12px;color:#444;margin-left:8px}
+    .ok{background:#ecfdf3;color:#0a6a2b}
+    .fail{background:#fff1f0;color:#b42318}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New";font-size:12px}
+    a{color:#0969da;text-decoration:none}
+    a:hover{text-decoration:underline}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card" id="top">
+    <h1>京东物流 V1.0 法定预测报告 <span class="tag" id="statusTag">加载中</span></h1>
+    <div class="meta" id="metaLine">正在读取 runs/latest_report.json ...</div>
+    <div class="small" id="hint"></div>
+  </div>
+
+  <div class="card" id="m1"><h2>① 当日实际交易数据</h2><div id="m1c"></div></div>
+  <div class="card" id="m2"><h2>② 昨日预测回顾</h2><div id="m2c"></div></div>
+  <div class="card" id="m3"><h2>③ 次日价格分布预测</h2><div id="m3c"></div></div>
+  <div class="card" id="m4"><h2>④ 未来 1 个月价格分布预测</h2><div id="m4c"></div></div>
+  <div class="card" id="m5"><h2>⑤ 未来 6 个月价格分布预测</h2><div id="m5c"></div></div>
+  <div class="card" id="m6"><h2>⑥ 模型状态与学习更新</h2><div id="m6c"></div></div>
+  <div class="card" id="m7"><h2>⑦ 过去五个交易日预测命中回顾</h2><div id="m7c"></div></div>
+
+  <div class="card">
+    <div class="small">
+      数据源：<span class="mono">runs/latest_report.json</span>（由 GitHub Actions 运行后自动写入）<br>
+      若提示“数据不可用”，说明当日真实数据字段缺失或抓取失败，但界面仍会保持法定结构。
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (id)=>document.getElementById(id);
+
+function kvTable(obj){
+  if(!obj || typeof obj !== 'object') return '<div class="small">数据不可用</div>';
+  const rows = Object.entries(obj).map(([k,v])=>{
+    const val = (typeof v === 'object') ? `<span class="mono">${escapeHtml(JSON.stringify(v))}</span>` : escapeHtml(String(v));
+    return `<tr><td class="k">${escapeHtml(k)}</td><td>${val}</td></tr>`;
+  }).join('');
+  return `<table><tbody>${rows}</tbody></table>`;
+}
+
+function arrayTable(arr){
+  if(!Array.isArray(arr) || arr.length===0) return '<div class="small">暂无数据</div>';
+  const keys = Array.from(new Set(arr.flatMap(x=>Object.keys(x||{}))));
+  const head = keys.map(k=>`<th>${escapeHtml(k)}</th>`).join('');
+  const body = arr.map(x=>{
+    const tds = keys.map(k=>{
+      const v = x?.[k];
+      const val = (typeof v === 'object') ? `<span class="mono">${escapeHtml(JSON.stringify(v))}</span>` : escapeHtml(v==null?'':String(v));
+      return `<td>${val}</td>`;
+    }).join('');
+    return `<tr>${tds}</tr>`;
+  }).join('');
+  return `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+function escapeHtml(s){
+  return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+}
+
+async function load(){
+  const url = 'runs/latest_report.json?_=' + Date.now();
+  try{
+    const r = await fetch(url, {cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+
+    // 顶部信息
+    const status = data.status || 'UNKNOWN';
+    $('statusTag').textContent = status;
+    $('statusTag').className = 'tag ' + (status==='SUCCESS'?'ok':(status==='FAIL'?'fail':''));
+    $('metaLine').textContent = `symbol=${data.symbol||'02618.HK'}  |  date=${data.trade_date||'未知'}  |  generated_at=${data.generated_at_bjt||'未知'}`;
+    $('hint').textContent = data.report_reason ? `提示：${data.report_reason}` : '';
+
+    // 模块渲染（字段名允许你后续按法定 schema 固化）
+    $('m1c').innerHTML = kvTable(data.module_1_market || data.market || data.m1);
+    $('m2c').innerHTML = kvTable(data.module_2_yesterday_review || data.yesterday_review || data.m2);
+    $('m3c').innerHTML = arrayTable(data.module_3_t1_distribution || data.t1_distribution || data.m3);
+    $('m4c').innerHTML = arrayTable(data.module_4_1m_distribution || data.m1_distribution || data.m4);
+    $('m5c').innerHTML = arrayTable(data.module_5_6m_distribution || data.m6_distribution || data.m5);
+    $('m6c').innerHTML = kvTable(data.module_6_model_state || data.model_state || data.m6);
+    $('m7c').innerHTML = arrayTable(data.module_7_last5_hit || data.last5 || data.m7);
+
+  }catch(e){
+    $('statusTag').textContent = 'NO_DATA';
+    $('statusTag').className = 'tag fail';
+    $('metaLine').textContent = '无法读取 runs/latest_report.json（尚未生成报告或路径不存在）';
+    $('hint').innerHTML = `当前只有运行日志可用：<a href="runs/run_log.jsonl">runs/run_log.jsonl</a>`;
+    $('top').className = 'card bad';
+    ['m1c','m2c','m3c','m4c','m5c','m6c','m7c'].forEach(id=>$(id).innerHTML='<div class="small">数据不可用</div>');
+  }
+}
+
+load();
+</script>
+</body>
+</html>
