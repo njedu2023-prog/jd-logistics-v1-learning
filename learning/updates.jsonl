@@ -1,0 +1,1 @@
+{"update_time_bjt": "2026-01-15T17:51:58", "run_id": "02f5ef506571485e", "model_version": "V1.0", "type": "self_learn_sigma", "today_trade_date": "2026-01-15", "old_sigma_base": 0.035, "new_sigma_base": 0.03268419298711178, "note": "最小自学习：用今日预测误差对sigma做轻微EMA校准（保底实现）"}
