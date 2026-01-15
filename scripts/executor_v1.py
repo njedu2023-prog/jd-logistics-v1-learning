@@ -283,7 +283,13 @@ def find_yesterday_pred_for_today(today_trade_date: str) -> Optional[Dict[str, A
     return cands[-1]
 
 def make_predictions(state: Dict[str, Any], today_close: float, today_trade_date: str) -> Dict[str, Any]:
-    mu = float(state["mu_base"])
+    mu_raw = state.get("mu_base")
+
+if mu_raw is None:
+    # 冷启动兜底值（只在第一次）
+    mu = 0.0
+else:
+    mu = float(mu_raw)
     sig_s = float(state["sigma_short"])
     sig_m = float(state["sigma_mid"])
     sig_l = float(state["sigma_long"])
