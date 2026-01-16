@@ -50,6 +50,9 @@ PRED_PATH = "predictions/pred_daily.jsonl"
 STATE_PATH = "state/model_state.json"
 REPORT_PATH = "report_latest.md"
 
+# ✅ 失败兜底：占位法定结构（用于 Pages/前端读）
+LATEST_REPORT_JSON_PATH = "runs/latest_report.json"
+
 # 抓取策略：方案A（有限次阻塞重试）
 RETRY_MAX = 12           # 最多重试次数
 RETRY_SLEEP_SEC = 10     # 每次间隔秒数
@@ -521,6 +524,46 @@ def build_report(
     lines.append("")
     return "\n".join(lines)
 
+def build_placeholder_report(run_log: Dict[str, Any]) -> str:
+    """
+    ✅ 失败兜底：即使模块①真实数据缺失，也输出一个可读占位报告，保证前端/Pages有产物。
+    """
+    lines: List[str] = []
+    lines.append("# 京东物流 V1.0 预测报告（占位）")
+    lines.append("")
+    lines.append(f"- 版本：{MODEL_VERSION}")
+    lines.append(f"- 运行时间（BJT）：{now_bjt_iso()}")
+    lines.append(f"- RunID：{run_log.get('run_id')}")
+    lines.append(f"- 状态：FAIL（模块①真实数据不可用）")
+    lines.append("")
+    lines.append("## 失败原因")
+    lines.append(f"- {run_log.get('report_reason')}")
+    lines.append("")
+    lines.append("## 输出说明（合规）")
+    lines.append("- 本次未获取到当日真实交易数据，因此：")
+    lines.append("  - 不生成预测分布（避免伪造）")
+    lines.append("  - 不生成昨日回顾（避免伪造）")
+    lines.append("  - 仅输出占位报告与法定结构 latest_report.json，保证界面可用且可追溯")
+    lines.append("")
+    return "\n".join(lines)
+
+def write_placeholder_latest_report_json(run_log: Dict[str, Any]) -> None:
+    obj = {
+        "status": "FAIL",
+        "symbol": SYMBOL,
+        "trade_date": "",
+        "generated_at_bjt": now_bjt_iso(),
+        "report_reason": str(run_log.get("report_reason") or ""),
+        "module_1_market": {},
+        "module_2_yesterday_review": {},
+        "module_3_t1_distribution": [],
+        "module_4_1m_distribution": [],
+        "module_5_6m_distribution": [],
+        "module_6_model_state": {},
+        "module_7_last5_hit": []
+    }
+    save_json(LATEST_REPORT_JSON_PATH, obj)
+
 
 # =========================
 # 主流程
@@ -542,13 +585,23 @@ def main() -> None:
     market_row, diag = fetch_market_row_blocking(MARKET_URL)
     run_log["market_fetch_diag"] = diag
 
+    # ✅ 关键改动：失败也产出“占位报告 + latest_report.json”，而不是直接 return 导致无报告产物
     if market_row is None:
         run_log["status"] = "FAIL"
         run_log["finished_at_bjt"] = now_bjt_iso()
-        run_log["report_output_status"] = "NO_OUTPUT"
+        run_log["report_output_status"] = "OUTPUT_PLACEHOLDER"
         run_log["report_reason"] = f"当日真实数据不可用（已重试{diag.get('attempts')}次）：{diag.get('last_error')}"
         append_jsonl(RUN_LOG_PATH, run_log)
+
+        placeholder_md = build_placeholder_report(run_log)
+        ensure_dir_for_file(REPORT_PATH)
+        with open(REPORT_PATH, "w", encoding="utf-8") as f:
+            f.write(placeholder_md)
+
+        write_placeholder_latest_report_json(run_log)
+
         print(run_log["report_reason"])
+        print(placeholder_md)
         return
 
     state = load_state()
@@ -586,6 +639,40 @@ def main() -> None:
     ensure_dir_for_file(REPORT_PATH)
     with open(REPORT_PATH, "w", encoding="utf-8") as f:
         f.write(report)
+
+    # ✅ 成功时也顺手更新 latest_report.json（可选但更一致）
+    save_json(LATEST_REPORT_JSON_PATH, {
+        "status": "OK",
+        "symbol": SYMBOL,
+        "trade_date": str(market_row.get("trade_date", "")),
+        "generated_at_bjt": now_bjt_iso(),
+        "report_reason": "当日真实数据拉取成功；预测/写入完成。",
+        "module_1_market": market_row,
+        "module_2_yesterday_review": eval_row,
+        "module_3_t1_distribution": [
+            {"p": 0.05, "v": pred_row.get("module3_t1_p05")},
+            {"p": 0.25, "v": pred_row.get("module3_t1_p25")},
+            {"p": 0.50, "v": pred_row.get("module3_t1_p50")},
+            {"p": 0.75, "v": pred_row.get("module3_t1_p75")},
+            {"p": 0.95, "v": pred_row.get("module3_t1_p95")},
+        ],
+        "module_4_1m_distribution": [
+            {"p": 0.05, "v": pred_row.get("module4_1m_p05")},
+            {"p": 0.25, "v": pred_row.get("module4_1m_p25")},
+            {"p": 0.50, "v": pred_row.get("module4_1m_p50")},
+            {"p": 0.75, "v": pred_row.get("module4_1m_p75")},
+            {"p": 0.95, "v": pred_row.get("module4_1m_p95")},
+        ],
+        "module_5_6m_distribution": [
+            {"p": 0.05, "v": pred_row.get("module5_6m_p05")},
+            {"p": 0.25, "v": pred_row.get("module5_6m_p25")},
+            {"p": 0.50, "v": pred_row.get("module5_6m_p50")},
+            {"p": 0.75, "v": pred_row.get("module5_6m_p75")},
+            {"p": 0.95, "v": pred_row.get("module5_6m_p95")},
+        ],
+        "module_6_model_state": state,
+        "module_7_last5_hit": load_last_n_jsonl(EVAL_PATH, 5),
+    })
 
     print(report)
 
