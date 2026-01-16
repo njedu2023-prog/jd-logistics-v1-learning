@@ -1,11 +1,16 @@
 # -*- coding: utf-8 -*-
 
 """
-JD Logistics V1.0 - Executor (runnable baseline)
+JD Logistics V1.0 - Executor (EWMA + Student-t + Term Structure)
 
-- 目的：先把 GitHub Actions 执行链路跑通，修复缩进/函数块错误
-- 数据源：GitHub Raw JSON（模块①当日真实交易数据）
-- 输出：run_log / eval / updates / pred_daily / state / report
+实现你确认的 3 件事（最小可落地版本）：
+1) EWMA 预测波动率 sigma(t)   -> 输出 sigma_1m / sigma_6m（年化）
+2) 收益分布用 t 分布（厚尾） -> 用 nu 自由度；把 t 分布缩放到单位方差
+3) 1M / 6M 分开 sigma（期限结构） -> 1M 用 sigma_1m，6M 用 sigma_6m（T+1 用 sigma_1m）
+
+说明：
+- 为了能计算 EWMA，需要历史收益序列。本文件新增写入：market/market_history.jsonl
+  每天把真实收盘价追加进去，然后用最近 N 天计算收益并滚动更新 sigma。
 """
 
 import os
@@ -27,19 +32,17 @@ except Exception:
 # ==============================
 
 HK_MARKET_API_TOKEN = os.getenv("HK_MARKET_API_TOKEN")
-
 if not HK_MARKET_API_TOKEN:
     raise RuntimeError("❌ 未读取到 HK_MARKET_API_TOKEN，请检查 GitHub Secrets 配置")
 
 # =========================
-# 固定配置（按当前冻结规则）
+# 固定配置
 # =========================
 
 MODEL_VERSION = "V1.0"
 SYMBOL = "02618.HK"
 
 # 模块①唯一数据源（当前仍是 GitHub Raw JSON）
-# ⚠️ 后面我们会把这里切换为你的真实港股接口
 MARKET_URL = "https://raw.githubusercontent.com/njedu2023-prog/jd-logistics-v1-learning/main/jd-logistics-latest.json"
 
 # 输出路径（仓库内）
@@ -49,14 +52,32 @@ UPD_PATH = "learning/updates.jsonl"
 PRED_PATH = "predictions/pred_daily.jsonl"
 STATE_PATH = "state/model_state.json"
 REPORT_PATH = "report_latest.md"
-
-# ✅ 失败兜底：占位法定结构（用于 Pages/前端读）
 LATEST_REPORT_JSON_PATH = "runs/latest_report.json"
 
-# 抓取策略：方案A（有限次阻塞重试）
-RETRY_MAX = 12           # 最多重试次数
-RETRY_SLEEP_SEC = 10     # 每次间隔秒数
+# 新增：保存真实历史（用于 EWMA）
+MARKET_HIST_PATH = "market/market_history.jsonl"
+
+# 抓取策略：有限次阻塞重试
+RETRY_MAX = 12
+RETRY_SLEEP_SEC = 10
 HTTP_TIMEOUT = 15
+
+# 交易日换算
+TRADING_DAYS_PER_YEAR = 252
+DT_1D = 1.0 / TRADING_DAYS_PER_YEAR
+DT_1M = 21.0 / TRADING_DAYS_PER_YEAR
+DT_6M = 126.0 / TRADING_DAYS_PER_YEAR
+
+# EWMA 参数（你后面要更“量化”可以继续调）
+# 经验：短期波动更敏感 -> lambda 小一点；长期更平滑 -> lambda 大一点
+EWMA_LAMBDA_1M = 0.94
+EWMA_LAMBDA_6M = 0.97
+
+# 估计波动用的最大历史长度（越大越稳，但越慢）
+MAX_RET_DAYS = 260  # 约 1 年
+
+# t 分布自由度（越小越厚尾；必须 > 2 才有方差）
+DEFAULT_T_NU = 7.0
 
 
 # =========================
@@ -101,14 +122,13 @@ def safe_float(x: Any, default: Optional[float] = None) -> Optional[float]:
         return default
 
 def pct(a: float, b: float) -> float:
-    # 误差百分比 abs(a-b)/b *100，b=0 时避免除零
     if b == 0:
         return 0.0
     return abs(a - b) / abs(b) * 100.0
 
 
 # =========================
-# 数据抓取（方案A阻塞重试）
+# 数据抓取（阻塞重试）
 # =========================
 def http_get_text(url: str) -> str:
     if requests is None:
@@ -118,9 +138,6 @@ def http_get_text(url: str) -> str:
     return r.text
 
 def fetch_market_row_blocking(url: str) -> Tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
-    """
-    方案A：有限次阻塞重试；成功返回 market_row；失败返回 None
-    """
     diag = {
         "source_url": url,
         "attempts": 0,
@@ -179,17 +196,87 @@ def fetch_market_row_blocking(url: str) -> Tuple[Optional[Dict[str, Any]], Dict[
 
 
 # =========================
-# 状态/学习（最小可跑通版）
+# 历史市场数据（用于 EWMA）
+# =========================
+def append_market_history(market_row: Dict[str, Any]) -> None:
+    """每天把真实市场数据追加到 market_history.jsonl，供波动率估计使用。"""
+    rec = {
+        "symbol": SYMBOL,
+        "trade_date": market_row.get("trade_date"),
+        "close": float(market_row.get("close")),
+        "open": float(market_row.get("open")),
+        "high": float(market_row.get("high")),
+        "low": float(market_row.get("low")),
+        "volume": int(market_row.get("volume")),
+        "amount_yi_hkd": float(market_row.get("amount_yi_hkd")),
+        "fetched_at_bjt": market_row.get("fetched_at_bjt"),
+        "raw_sha1": market_row.get("raw_sha1"),
+    }
+    append_jsonl(MARKET_HIST_PATH, rec)
+
+def load_last_n_market_history(n: int = MAX_RET_DAYS + 2) -> List[Dict[str, Any]]:
+    if not os.path.exists(MARKET_HIST_PATH):
+        return []
+    buf: List[Dict[str, Any]] = []
+    with open(MARKET_HIST_PATH, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                buf.append(json.loads(line))
+            except Exception:
+                continue
+    return buf[-n:]
+
+
+def compute_log_returns_from_history(hist: List[Dict[str, Any]]) -> List[float]:
+    """用 close 计算 log return 序列（按时间顺序）"""
+    if not hist or len(hist) < 2:
+        return []
+    closes: List[float] = []
+    for x in hist:
+        c = safe_float(x.get("close"), None)
+        if c is None or c <= 0:
+            continue
+        closes.append(float(c))
+    if len(closes) < 2:
+        return []
+    rets: List[float] = []
+    for i in range(1, len(closes)):
+        rets.append(math.log(closes[i] / closes[i - 1]))
+    return rets
+
+
+# =========================
+# 状态（新增：sigma_1m / sigma_6m / nu）
 # =========================
 def default_state() -> Dict[str, Any]:
     return {
         "model_version": MODEL_VERSION,
         "created_at_bjt": now_bjt_iso(),
         "updated_at_bjt": now_bjt_iso(),
+
+        # 旧字段保留（兼容前端/报告）
         "sigma_base": 0.035,
         "mu_base": 0.0,
+
+        # 新字段：期限结构（年化）
+        "sigma_1m": 0.35,
+        "sigma_6m": 0.40,
+
+        # 厚尾 t 分布参数
+        "t_nu": DEFAULT_T_NU,
+
         "last_close": None,
         "last_trade_date": None,
+
+        # 显示兼容（前端已有字段映射）
+        "sigma_short": 0.35,
+        "sigma_mid": 0.35,
+        "sigma_long": 0.40,
+        "enable_volume_factor": False,
+        "enable_beta_anchor": False,
     }
 
 def load_state() -> Dict[str, Any]:
@@ -197,49 +284,91 @@ def load_state() -> Dict[str, Any]:
     if not isinstance(st, dict):
         st = default_state()
         save_json(STATE_PATH, st)
+
+    # 补齐缺失字段
     for k, v in default_state().items():
         if k not in st:
             st[k] = v
     return st
 
-def maybe_self_learn_and_update_state(
-    state: Dict[str, Any],
-    today_trade_date: str,
-    today_close: float,
-    eval_row: Dict[str, Any],
-    run_id: str
-) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+
+# =========================
+# EWMA 波动率估计（年化）
+# =========================
+def ewma_annualized_sigma(returns: List[float], lam: float, init_sigma: float) -> float:
+    """
+    returns: 日频 log return
+    lam: EWMA lambda
+    init_sigma: 初始年化sigma（用于历史不足时）
+    输出：年化 sigma
+    """
+    if not returns:
+        return float(init_sigma)
+
+    # 把年化 sigma 转成日方差作为初值
+    var = (init_sigma * init_sigma) / TRADING_DAYS_PER_YEAR
+
+    # 用 EWMA 更新日方差
+    for r in returns:
+        var = lam * var + (1.0 - lam) * (r * r)
+
+    # 转回年化
+    ann = math.sqrt(max(var, 1e-12) * TRADING_DAYS_PER_YEAR)
+    return float(min(max(ann, 0.01), 2.0))  # 夹一下，避免极端
+
+
+def update_sigmas_from_history(state: Dict[str, Any], market_hist: List[Dict[str, Any]], run_id: str) -> List[Dict[str, Any]]:
+    """
+    用历史收益滚动更新 sigma_1m / sigma_6m，并写入 updates.jsonl（可追溯）
+    """
     updates: List[Dict[str, Any]] = []
-    try:
-        rel_err = safe_float(eval_row.get("rel_error_pct"), None)
-        if rel_err is None:
-            return state, updates
 
-        old_sigma = float(state.get("sigma_base", 0.035))
-        err = max(0.0, rel_err / 100.0)
-        new_sigma = 0.9 * old_sigma + 0.1 * max(0.01, min(0.20, err))
-        state["sigma_base"] = float(new_sigma)
+    returns = compute_log_returns_from_history(market_hist)
+    if not returns:
+        return updates
 
-        updates.append({
-            "update_time_bjt": now_bjt_iso(),
-            "run_id": run_id,
-            "model_version": MODEL_VERSION,
-            "type": "self_learn_sigma",
-            "today_trade_date": today_trade_date,
-            "old_sigma_base": old_sigma,
-            "new_sigma_base": float(new_sigma),
-            "note": "最小自学习：用今日预测误差对sigma做轻微EMA校准（保底实现）"
-        })
-    except Exception:
-        pass
+    # 只用最近 MAX_RET_DAYS 天
+    returns = returns[-MAX_RET_DAYS:]
 
-    return state, updates
+    old_1m = float(state.get("sigma_1m", state.get("sigma_short", 0.35)))
+    old_6m = float(state.get("sigma_6m", state.get("sigma_long", 0.40)))
+
+    new_1m = ewma_annualized_sigma(returns, EWMA_LAMBDA_1M, old_1m)
+    new_6m = ewma_annualized_sigma(returns, EWMA_LAMBDA_6M, old_6m)
+
+    # 写回 state（并同步兼容字段）
+    state["sigma_1m"] = float(new_1m)
+    state["sigma_6m"] = float(new_6m)
+
+    state["sigma_short"] = float(new_1m)
+    state["sigma_mid"] = float(new_1m)
+    state["sigma_long"] = float(new_6m)
+
+    # 兼容旧字段（系统里若有人还用 sigma_base）
+    state["sigma_base"] = float(new_1m)
+
+    updates.append({
+        "update_time_bjt": now_bjt_iso(),
+        "run_id": run_id,
+        "model_version": MODEL_VERSION,
+        "type": "ewma_sigma_term_structure",
+        "lambda_1m": EWMA_LAMBDA_1M,
+        "lambda_6m": EWMA_LAMBDA_6M,
+        "ret_days_used": len(returns),
+        "old_sigma_1m": old_1m,
+        "new_sigma_1m": float(new_1m),
+        "old_sigma_6m": old_6m,
+        "new_sigma_6m": float(new_6m),
+        "note": "EWMA 更新：生成 1M/6M 年化波动率期限结构（t 分布预测将使用它）"
+    })
+    return updates
 
 
 # =========================
-# 预测（最小可跑通版）
+# 分布：t 分布分位（缩放到单位方差）
 # =========================
-def normal_quantile(p: float) -> float:
+def _normal_quantile(p: float) -> float:
+    # 你原来的近似实现（保留）
     p = min(max(p, 1e-10), 1 - 1e-10)
     a = [-3.969683028665376e+01,  2.209460984245205e+02, -2.759285104469687e+02,
           1.383577518672690e+02, -3.066479806614716e+01,  2.506628277459239e+00]
@@ -264,41 +393,88 @@ def normal_quantile(p: float) -> float:
     return (((((a[0]*r + a[1])*r + a[2])*r + a[3])*r + a[4])*r + a[5])*q / \
            (((((b[0]*r + b[1])*r + b[2])*r + b[3])*r + b[4])*r + 1)
 
+def t_quantile_unitvar(p: float, nu: float) -> float:
+    """
+    返回：t 分布分位点，经过缩放，使其方差=1（便于 sigma 直接当波动率用）
+    - 若 scipy 可用：用 scipy.stats.t.ppf
+    - 否则：退化为正态近似（nu 大时误差小；nu=7 时会偏保守）
+    """
+    nu = float(nu)
+    if nu <= 2.0:
+        nu = 3.0
+
+    # 单位方差缩放因子：Var(t_nu)=nu/(nu-2)
+    scale = math.sqrt(nu / (nu - 2.0))
+
+    # 尝试 scipy
+    try:
+        from scipy.stats import t as student_t  # type: ignore
+        q = float(student_t.ppf(p, df=nu))
+        return q / scale
+    except Exception:
+        # 无 scipy：用正态近似兜底
+        return _normal_quantile(p)
+
+
+# =========================
+# 预测（t 分布 + 1M/6M sigma）
+# =========================
+def q_price_log_t(spot: float, mu: float, sigma_ann: float, t_year: float, p: float, nu: float) -> float:
+    """
+    对数收益：
+      r = (mu - 0.5*sigma^2)*t + sigma*sqrt(t)*Z
+    其中 Z ~ t(nu) 并缩放到单位方差
+    """
+    z = t_quantile_unitvar(p, nu)
+    return float(spot * math.exp((mu - 0.5 * sigma_ann * sigma_ann) * t_year + sigma_ann * math.sqrt(t_year) * z))
+
 def make_predictions(state: Dict[str, Any], spot_close: float, target_trade_date: str) -> Dict[str, Any]:
     mu = float(0.0 if state.get("mu_base") is None else state.get("mu_base"))
-    sigma = float(0.035 if state.get("sigma_base") is None else state.get("sigma_base"))
+    nu = float(state.get("t_nu", DEFAULT_T_NU))
 
-    t1 = 1/252
-    t1m = 21/252
-    t6m = 126/252
+    sigma_1m = float(state.get("sigma_1m", state.get("sigma_short", 0.35)))
+    sigma_6m = float(state.get("sigma_6m", state.get("sigma_long", 0.40)))
 
-    def q_price(t: float, p: float) -> float:
-        z = normal_quantile(p)
-        return float(spot_close * math.exp((mu - 0.5*sigma*sigma)*t + sigma*math.sqrt(t)*z))
+    # 规则：T+1 用 1M sigma；1M 用 1M sigma；6M 用 6M sigma
+    def q(t: float, p: float, sig: float) -> float:
+        return q_price_log_t(spot_close, mu, sig, t, p, nu)
 
     return {
         "pred_date": target_trade_date,
         "symbol": SYMBOL,
         "model_version": MODEL_VERSION,
-        "sigma_base": sigma,
+
+        # 把核心参数写进预测记录（便于审计）
         "mu_base": mu,
+        "t_nu": nu,
+        "sigma_1m": sigma_1m,
+        "sigma_6m": sigma_6m,
+        "sigma_short": sigma_1m,
+        "sigma_long": sigma_6m,
         "enable_volume_factor": False,
         "enable_beta_anchor": False,
-        "module3_t1_p05": q_price(t1, 0.05),
-        "module3_t1_p25": q_price(t1, 0.25),
-        "module3_t1_p50": q_price(t1, 0.50),
-        "module3_t1_p75": q_price(t1, 0.75),
-        "module3_t1_p95": q_price(t1, 0.95),
-        "module4_1m_p05": q_price(t1m, 0.05),
-        "module4_1m_p25": q_price(t1m, 0.25),
-        "module4_1m_p50": q_price(t1m, 0.50),
-        "module4_1m_p75": q_price(t1m, 0.75),
-        "module4_1m_p95": q_price(t1m, 0.95),
-        "module5_6m_p05": q_price(t6m, 0.05),
-        "module5_6m_p25": q_price(t6m, 0.25),
-        "module5_6m_p50": q_price(t6m, 0.50),
-        "module5_6m_p75": q_price(t6m, 0.75),
-        "module5_6m_p95": q_price(t6m, 0.95),
+
+        # ③ 次日（T+1）
+        "module3_t1_p05": q(DT_1D, 0.05, sigma_1m),
+        "module3_t1_p25": q(DT_1D, 0.25, sigma_1m),
+        "module3_t1_p50": q(DT_1D, 0.50, sigma_1m),
+        "module3_t1_p75": q(DT_1D, 0.75, sigma_1m),
+        "module3_t1_p95": q(DT_1D, 0.95, sigma_1m),
+
+        # ④ 1M
+        "module4_1m_p05": q(DT_1M, 0.05, sigma_1m),
+        "module4_1m_p25": q(DT_1M, 0.25, sigma_1m),
+        "module4_1m_p50": q(DT_1M, 0.50, sigma_1m),
+        "module4_1m_p75": q(DT_1M, 0.75, sigma_1m),
+        "module4_1m_p95": q(DT_1M, 0.95, sigma_1m),
+
+        # ⑤ 6M
+        "module5_6m_p05": q(DT_6M, 0.05, sigma_6m),
+        "module5_6m_p25": q(DT_6M, 0.25, sigma_6m),
+        "module5_6m_p50": q(DT_6M, 0.50, sigma_6m),
+        "module5_6m_p75": q(DT_6M, 0.75, sigma_6m),
+        "module5_6m_p95": q(DT_6M, 0.95, sigma_6m),
+
         "generated_at_bjt": now_bjt_iso(),
     }
 
@@ -407,7 +583,7 @@ def build_eval_row(market_row: Dict[str, Any], last_pred: Optional[Dict[str, Any
 
 
 # =========================
-# 报告（简单可读版，先保证输出）
+# 报告（先保证输出）
 # =========================
 def fmt2(x: Any) -> str:
     if x is None:
@@ -481,7 +657,7 @@ def build_report(
     lines.append(f"- P95：{fmt2(pred_row['module3_t1_p95'])}")
     lines.append("")
 
-    lines.append("## ④ 未来1个月价格分布预测")
+    lines.append("## ④ 未来1个月价格分布预测（sigma_1m）")
     lines.append(f"- P05：{fmt2(pred_row['module4_1m_p05'])}")
     lines.append(f"- P25：{fmt2(pred_row['module4_1m_p25'])}")
     lines.append(f"- P50：{fmt2(pred_row['module4_1m_p50'])}")
@@ -489,7 +665,7 @@ def build_report(
     lines.append(f"- P95：{fmt2(pred_row['module4_1m_p95'])}")
     lines.append("")
 
-    lines.append("## ⑤ 未来6个月价格分布预测")
+    lines.append("## ⑤ 未来6个月价格分布预测（sigma_6m）")
     lines.append(f"- P05：{fmt2(pred_row['module5_6m_p05'])}")
     lines.append(f"- P25：{fmt2(pred_row['module5_6m_p25'])}")
     lines.append(f"- P50：{fmt2(pred_row['module5_6m_p50'])}")
@@ -498,14 +674,15 @@ def build_report(
     lines.append("")
 
     lines.append("## ⑥ 模型状态与学习更新")
-    lines.append(f"- sigma_base：{fmt2(state.get('sigma_base'))}")
-    lines.append(f"- mu_base：{fmt2(state.get('mu_base'))}")
+    lines.append(f"- sigma_1m（年化）：{fmt2(state.get('sigma_1m'))}")
+    lines.append(f"- sigma_6m（年化）：{fmt2(state.get('sigma_6m'))}")
+    lines.append(f"- t 分布自由度 nu：{fmt2(state.get('t_nu'))}")
     if param_updates:
         lines.append(f"- 本次更新条目：{len(param_updates)}")
         for u in param_updates[-5:]:
-            lines.append(f"  - {u.get('type')}：{u.get('old_sigma_base')} → {u.get('new_sigma_base')}（{u.get('note')}）")
+            lines.append(f"  - {u.get('type')}：1M {u.get('old_sigma_1m')}→{u.get('new_sigma_1m')}；6M {u.get('old_sigma_6m')}→{u.get('new_sigma_6m')}")
     else:
-        lines.append("- 本次无学习更新（或无昨日预测可回顾）。")
+        lines.append("- 本次无更新（历史不足或首次运行）。")
     lines.append("")
 
     lines.append("## ⑦ 过去五个交易日预测命中回顾（最近5条）")
@@ -525,9 +702,6 @@ def build_report(
     return "\n".join(lines)
 
 def build_placeholder_report(run_log: Dict[str, Any]) -> str:
-    """
-    ✅ 失败兜底：即使模块①真实数据缺失，也输出一个可读占位报告，保证前端/Pages有产物。
-    """
     lines: List[str] = []
     lines.append("# 京东物流 V1.0 预测报告（占位）")
     lines.append("")
@@ -585,7 +759,6 @@ def main() -> None:
     market_row, diag = fetch_market_row_blocking(MARKET_URL)
     run_log["market_fetch_diag"] = diag
 
-    # ✅ 关键改动：失败也产出“占位报告 + latest_report.json”，而不是直接 return 导致无报告产物
     if market_row is None:
         run_log["status"] = "FAIL"
         run_log["finished_at_bjt"] = now_bjt_iso()
@@ -604,51 +777,55 @@ def main() -> None:
         print(placeholder_md)
         return
 
-    state = load_state()
-    last_pred = load_last_pred_from_jsonl(PRED_PATH)
+    # 1) 先把今日真实市场数据写入历史（供 EWMA 用）
+    append_market_history(market_row)
 
+    # 2) 读状态 & 用历史收益更新 sigma_1m / sigma_6m
+    state = load_state()
+    market_hist = load_last_n_market_history()
+    sigma_updates = update_sigmas_from_history(state, market_hist, run_id=run_id)
+    for u in sigma_updates:
+        append_jsonl(UPD_PATH, u)
+
+    # 3) 昨日预测回顾
+    last_pred = load_last_pred_from_jsonl(PRED_PATH)
     eval_row = build_eval_row(market_row, last_pred, run_id)
     append_jsonl(EVAL_PATH, eval_row)
 
-    state, param_updates = maybe_self_learn_and_update_state(
-        state=state,
-        today_trade_date=str(market_row["trade_date"]),
-        today_close=float(market_row["close"]),
-        eval_row=eval_row,
-        run_id=run_id
-    )
-    for u in param_updates:
-        append_jsonl(UPD_PATH, u)
-
+    # 4) 生成今天预测（t 分布 + 期限结构 sigma）
     pred_row = make_predictions(state, float(market_row["close"]), str(market_row["trade_date"]))
     pred_row["run_id"] = run_id
     append_jsonl(PRED_PATH, pred_row)
 
+    # 5) 更新 state
     state["last_close"] = float(market_row["close"])
     state["last_trade_date"] = str(market_row["trade_date"])
     state["updated_at_bjt"] = now_bjt_iso()
     save_json(STATE_PATH, state)
 
+    # 6) 写 run_log
     run_log["status"] = "OK"
     run_log["finished_at_bjt"] = now_bjt_iso()
     run_log["report_output_status"] = "OUTPUT"
-    run_log["report_reason"] = "当日真实数据拉取成功；预测/写入完成。"
+    run_log["report_reason"] = "当日真实数据拉取成功；EWMA更新sigma；t分布预测写入完成。"
     append_jsonl(RUN_LOG_PATH, run_log)
 
-    report = build_report(market_row, eval_row, pred_row, state, run_log, param_updates)
+    # 7) 写 markdown 报告
+    report = build_report(market_row, eval_row, pred_row, state, run_log, sigma_updates)
     ensure_dir_for_file(REPORT_PATH)
     with open(REPORT_PATH, "w", encoding="utf-8") as f:
         f.write(report)
 
-    # ✅ 成功时也顺手更新 latest_report.json（可选但更一致）
+    # 8) 写 latest_report.json（给 HTML 用）
     save_json(LATEST_REPORT_JSON_PATH, {
-        "status": "OK",
+        "status": "SUCCESS",
         "symbol": SYMBOL,
         "trade_date": str(market_row.get("trade_date", "")),
         "generated_at_bjt": now_bjt_iso(),
-        "report_reason": "当日真实数据拉取成功；预测/写入完成。",
+        "report_reason": run_log["report_reason"],
         "module_1_market": market_row,
         "module_2_yesterday_review": eval_row,
+
         "module_3_t1_distribution": [
             {"p": 0.05, "v": pred_row.get("module3_t1_p05")},
             {"p": 0.25, "v": pred_row.get("module3_t1_p25")},
@@ -670,7 +847,14 @@ def main() -> None:
             {"p": 0.75, "v": pred_row.get("module5_6m_p75")},
             {"p": 0.95, "v": pred_row.get("module5_6m_p95")},
         ],
-        "module_6_model_state": state,
+
+        # module_6_model_state：把模型关键参数都放进去（HTML 前端会自动翻中文）
+        "module_6_model_state": {
+            **state,
+            "model_version": MODEL_VERSION,
+            "symbol": SYMBOL,
+        },
+
         "module_7_last5_hit": load_last_n_jsonl(EVAL_PATH, 5),
     })
 
