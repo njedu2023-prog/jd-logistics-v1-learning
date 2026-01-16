@@ -21,9 +21,9 @@
     "sigma_long_min": 0.005,
     "sigma_long_max": 0.4
   },
-  "updated_at_bjt": "2026-01-17T05:43:04",
+  "updated_at_bjt": "2026-01-17T05:43:21",
   "created_at_bjt": "2026-01-15T15:33:33",
-  "sigma_base": 0.022354031595784654,
+  "sigma_base": 0.02111862843620619,
   "last_close": 11.51,
   "last_trade_date": "2026-01-16"
 }
