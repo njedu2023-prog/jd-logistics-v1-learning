@@ -1,29 +1,22 @@
 {
   "model_version": "V1.0",
   "created_at_bjt": "2026-01-15T15:33:33",
-  "updated_at_bjt": "2026-01-17T05:43:21",
-
+  "updated_at_bjt": "2026-01-17T07:48:30",
   "symbol": "02618.HK",
   "last_success_trade_date": null,
   "last_run_id": null,
-
   "mu_base": 0.0,
-
   "sigma_base": 0.35,
   "sigma_1m": 0.35,
-  "sigma_6m": 0.40,
-
+  "sigma_6m": 0.4,
   "t_nu": 7.0,
-
   "sigma_short": 0.35,
   "sigma_mid": 0.35,
-  "sigma_long": 0.40,
-
+  "sigma_long": 0.4,
   "enable_volume_factor": false,
   "enable_beta_anchor": false,
   "beta_window": 60,
   "volume_window": 20,
-
   "safety_limits": {
     "mu_min": -0.02,
     "mu_max": 0.02,
@@ -34,7 +27,6 @@
     "sigma_long_min": 0.005,
     "sigma_long_max": 2.0
   },
-
   "last_close": 11.51,
   "last_trade_date": "2026-01-16"
 }
