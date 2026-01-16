@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
+
 """
 JD Logistics V1.0 - Executor (runnable baseline)
+
 - 目的：先把 GitHub Actions 执行链路跑通，修复缩进/函数块错误
 - 数据源：GitHub Raw JSON（模块①当日真实交易数据）
 - 输出：run_log / eval / updates / pred_daily / state / report
 """
 
-import json
 import os
+import json
 import time
 import uuid
 import math
@@ -20,14 +22,24 @@ try:
 except Exception:
     requests = None
 
+# ==============================
+# 从 GitHub Secrets 读取港股 API Token
+# ==============================
+
+HK_MARKET_API_TOKEN = os.getenv("HK_MARKET_API_TOKEN")
+
+if not HK_MARKET_API_TOKEN:
+    raise RuntimeError("❌ 未读取到 HK_MARKET_API_TOKEN，请检查 GitHub Secrets 配置")
 
 # =========================
-# 固定配置（按你当前冻结规则）
+# 固定配置（按当前冻结规则）
 # =========================
+
 MODEL_VERSION = "V1.0"
 SYMBOL = "02618.HK"
 
-# 模块①唯一数据源（你已锁定）
+# 模块①唯一数据源（当前仍是 GitHub Raw JSON）
+# ⚠️ 后面我们会把这里切换为你的真实港股接口
 MARKET_URL = "https://raw.githubusercontent.com/njedu2023-prog/xiaomi-data/main/jd-logistics-latest.json"
 
 # 输出路径（仓库内）
