@@ -5,86 +5,30 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>京东物流 V1.0 法定预测报告</title>
   <style>
-    body{
-      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",Arial;
-      margin:24px;background:#f6f7f9;color:#111
-    }
-    .wrap{max-width:1120px;margin:0 auto}
-    .card{
-      background:#fff;border:1px solid #e6e8eb;border-radius:12px;
-      padding:18px;margin:14px 0;box-shadow:0 1px 2px rgba(0,0,0,.04)
-    }
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",Arial;margin:20px;background:#f6f7f9;color:#111}
+    .wrap{max-width:1280px;margin:0 auto} /* ⑥ 页面更宽 */
+    .card{background:#fff;border:1px solid #e6e8eb;border-radius:12px;padding:18px;margin:14px 0;box-shadow:0 1px 2px rgba(0,0,0,.04)}
     h1{font-size:20px;margin:0 0 8px}
     h2{font-size:16px;margin:0 0 10px}
     .meta{color:#666;font-size:13px}
     .bad{background:#fff5f5;border-color:#ffd6d6}
     .bad .meta{color:#b00020}
-
-    /* 表格整体更专业 */
-    table{
-      width:100%;
-      border-collapse:collapse;
-      font-size:13px;
-      table-layout:auto;
-    }
-    th,td{
-      border-bottom:1px solid #eee;
-      padding:10px 8px;
-      text-align:left;
-      vertical-align:middle;
-    }
-    th{
-      color:#444;
-      font-weight:700;
-      background:#fafafa;
-      white-space:nowrap;
-      position:sticky;
-      top:0;
-      z-index:2;
-    }
-
-    /* KV 表（模块①②⑥） */
-    .k{
-      color:#666;
-      width:220px;
-      white-space:nowrap;
-      background:#fcfcfd;
-      font-weight:600;
-    }
-
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th,td{border-bottom:1px solid #eee;padding:8px 6px;text-align:left;vertical-align:top}
+    th{color:#444;font-weight:600;background:#fafafa;white-space:nowrap}
+    .k{color:#666;width:180px;white-space:nowrap}
     .small{font-size:12px;color:#666;line-height:1.6}
-    .tag{
-      display:inline-block;padding:2px 8px;border-radius:999px;
-      background:#f0f2f5;font-size:12px;color:#444;margin-left:8px
-    }
+    .tag{display:inline-block;padding:2px 8px;border-radius:999px;background:#f0f2f5;font-size:12px;color:#444;margin-left:8px}
     .ok{background:#ecfdf3;color:#0a6a2b}
     .fail{background:#fff1f0;color:#b42318}
-
-    .mono{
-      font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New";
-      font-size:12px
-    }
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New";font-size:12px}
+    .mono-wrap{word-break:break-all;white-space:normal}
     .num{font-variant-numeric:tabular-nums}
-    .td-num{ text-align:right; }
-    .td-date{ white-space:nowrap; }
-    .td-text{ white-space:nowrap; }
-
-    /* 横向滚动容器：解决模块⑦挤压 */
-    .scrollX{
-      overflow:auto;
-      border:1px solid #eef0f3;
-      border-radius:10px;
-      background:#fff;
-    }
-    .scrollX table{
-      min-width:1200px; /* 关键：避免列挤压在一起 */
-    }
-
-    /* 行 hover 更像报表 */
-    tbody tr:hover td{ background:#fbfcff; }
+    .scrollX{overflow:auto}
+    /* ③ 次日分布表：强制值靠左 */
+    #m3c th, #m3c td { text-align:left !important; }
   </style>
 </head>
-
 <body>
 <div class="wrap">
 
@@ -98,10 +42,13 @@
   </div>
 
   <div class="card"><h2>① 当日实际交易数据</h2><div id="m1c"></div></div>
-  <div class="card"><h2>② 昨日预测回顾</h2><div id="m2c"></div></div>
+
+  <!-- ② 位置调整：移到⑤下面、⑥上面（已按要求改） -->
   <div class="card"><h2>③ 次日价格分布预测</h2><div id="m3c"></div></div>
   <div class="card"><h2>④ 未来 1 个月价格分布预测</h2><div id="m4c"></div></div>
   <div class="card"><h2>⑤ 未来 6 个月价格分布预测</h2><div id="m5c"></div></div>
+  <div class="card"><h2>② 昨日预测回顾</h2><div id="m2c"></div></div>
+
   <div class="card"><h2>⑥ 模型状态与学习更新</h2><div id="m6c"></div></div>
   <div class="card"><h2>⑦ 过去五个交易日预测命中回顾</h2><div id="m7c"></div></div>
 
@@ -133,51 +80,49 @@ const FIELD_ZH = {
   fetched_at_bjt: '抓取时间（北京时间）',
   raw_sha1: '数据校验指纹',
 
-  // 分布表（③④⑤）
+  // 分布表
   p: '分位点（P）',
   v: '价格（HKD）',
 
-  // 模块⑦（回顾表）
+  // 模块⑦（去掉“T+1”文字：只改显示名，不改底层字段）
   eval_date: '评估日期',
   target_trade_date: '目标交易日',
-  symbol: '股票代码',
+  symbol: '股票代码',               // ⑤：会在模块⑦表格里被隐藏
   actual_close: '实际收盘价',
   pred_ref_date: '预测参考日',
-  pred_median_t1: '预测中位价（T+1）',
-  pred_p25_t1: '预测 25 分位（T+1）',
-  pred_p75_t1: '预测 75 分位（T+1）',
+  pred_median_t1: '预测中位价',
+  pred_p25_t1: '预测 25 分位',
+  pred_p75_t1: '预测 75 分位',
   abs_error: '绝对误差',
   rel_error_pct: '相对误差（%）',
   hit_bucket: '命中分位区间',
   judge: '判断结果',
   remark: '备注',
+  volume_percentile_20d: '近20日成交量分位',
+  run_id: '运行ID',
 
-  // 模块⑥（你截图里那些英文键）
-  model_version: '模型版本',
-  last_success_trade_date: '最近一次成功交易日',
-  last_run_id: '最近一次运行编号',
-  mu_base: '漂移率 μ（基准）',
-  sigma_short: '短期波动率 σ（短）',
-  sigma_mid: '中期波动率 σ（中）',
-  sigma_long: '长期波动率 σ（长）',
-  enable_volume_factor: '启用量能因子',
-  enable_beta_anchor: '启用指数 β 锚定',
-  beta_window: 'β 计算窗口（天）',
-  volume_window: '量能计算窗口（天）',
-  safety_limits: '安全边界（limits）',
-  updated_at_bjt: '更新时间（北京时间）',
-  created_at_bjt: '创建时间（北京时间）',
-  sigma_base: '基础波动率 σ（base）',
-  last_close: '最近收盘价',
-  last_trade_date: '最近交易日'
+  // ⑥ 安全边界（limits）常见字段：补中文，且会展开显示
+  limits: '安全边界',
+  mu_min: 'μ 下限',
+  mu_max: 'μ 上限',
+  sigma_short_min: '短期σ下限',
+  sigma_short_max: '短期σ上限',
+  sigma_mid_min: '中期σ下限',
+  sigma_mid_max: '中期σ上限',
+  sigma_long_min: '长期σ下限',
+  sigma_long_max: '长期σ上限',
+  jump_prob_min: '跳跃概率下限',
+  jump_prob_max: '跳跃概率上限',
+  jump_mu_min: '跳跃均值下限',
+  jump_mu_max: '跳跃均值上限',
+  jump_sigma_min: '跳跃σ下限',
+  jump_sigma_max: '跳跃σ上限'
 };
 
 function label(k){ return FIELD_ZH[k] || k; }
 
-/** 安全的 HTML 转义 */
 function escapeHtml(s){
-  const str = String(s);
-  return str
+  return String(s)
     .replaceAll('&','&amp;')
     .replaceAll('<','&lt;')
     .replaceAll('>','&gt;')
@@ -185,48 +130,59 @@ function escapeHtml(s){
     .replaceAll("'","&#39;");
 }
 
-/** 类型判断 */
+/** 数值格式：价格/误差/分位值保留2位；成交量千分位；百分比也保留2位 */
 function isNumber(x){ return typeof x === 'number' && Number.isFinite(x); }
-function isBool(x){ return typeof x === 'boolean'; }
-
-/** 数值格式：统一更专业 */
 function fmtNumber(n, digits=2){ return n.toFixed(digits); }
 
 function fmtValueByKey(v, k){
-  // 布尔值：是/否
-  if(isBool(v)) return v ? '是' : '否';
   if(!isNumber(v)) return String(v);
 
-  // 成交量：整数千分位
   if(k === 'volume'){
     return Math.round(v).toLocaleString('zh-CN');
   }
-
-  // 分位点 p：0.05/0.25/0.5... 保留2位
   if(k === 'p'){
     return fmtNumber(v, 2);
   }
-
-  // 相对误差（%）
   if(String(k).toLowerCase().includes('rel_error') && String(k).toLowerCase().includes('pct')){
     return fmtNumber(v, 2);
   }
-
-  // 其他所有数值：统一 2 位（价格/误差/分位价等）
   return fmtNumber(v, 2);
 }
 
-/** 单元格渲染：对象用 JSON；标量按键格式化 */
+/** 尝试把 JSON 字符串解析为对象（用于⑥安全边界更易读） */
+function tryParseJsonObject(str){
+  if(typeof str !== 'string') return null;
+  const s = str.trim();
+  if(!(s.startsWith('{') && s.endsWith('}'))) return null;
+  try{
+    const o = JSON.parse(s);
+    return (o && typeof o === 'object' && !Array.isArray(o)) ? o : null;
+  }catch(e){
+    return null;
+  }
+}
+
 function renderScalar(v, k){
   if(v == null) return '';
-  if(typeof v === 'object'){
-    return `<span class="mono">${escapeHtml(JSON.stringify(v))}</span>`;
+
+  // ⑥ 安全边界：对象/可解析JSON字符串 -> 直接展开成表格（更好懂）
+  if(typeof v === 'object' && !Array.isArray(v)){
+    return `<div class="scrollX">${kvTable(v)}</div>`;
   }
-  const s = (isNumber(v) || isBool(v)) ? fmtValueByKey(v, k) : String(v);
+  const parsed = tryParseJsonObject(v);
+  if(parsed){
+    return `<div class="scrollX">${kvTable(parsed)}</div>`;
+  }
+
+  // run_id 这种长字段：强制可换行
+  if(k === 'run_id'){
+    return `<span class="mono mono-wrap">${escapeHtml(String(v))}</span>`;
+  }
+
+  const s = isNumber(v) ? fmtValueByKey(v, k) : String(v);
   return `<span class="num">${escapeHtml(s)}</span>`;
 }
 
-/** KV 表（模块①②⑥） */
 function kvTable(obj, emptyHint){
   if(!obj || Object.keys(obj).length===0){
     return `<div class="small">${emptyHint || '暂无可用数据'}</div>`;
@@ -237,28 +193,32 @@ function kvTable(obj, emptyHint){
   return `<table><tbody>${rows}</tbody></table>`;
 }
 
-/** 判断列类型：用于模块⑦对齐/不换行 */
-function cellClassByKey(k){
-  const kk = String(k).toLowerCase();
-  if(kk.includes('date')) return 'td-date';
-  if(kk.includes('close') || kk.includes('median') || kk.includes('p25') || kk.includes('p75') || kk.includes('error') || kk === 'v' || kk === 'p') return 'td-num';
-  if(kk.includes('symbol')) return 'td-text';
-  return '';
-}
-
-/** 数组表（模块③④⑤⑦） */
-function arrayTable(arr){
+/**
+ * 数组表格：支持隐藏列、固定列顺序
+ * options:
+ *  - excludeKeys: string[]
+ *  - preferredOrder: string[]
+ */
+function arrayTable(arr, options={}){
   if(!Array.isArray(arr) || arr.length===0){
     return '<div class="small">暂无数据</div>';
   }
-  const keys = Array.from(new Set(arr.flatMap(x=>Object.keys(x||{}))));
+
+  const exclude = new Set(options.excludeKeys || []);
+  const allKeys = Array.from(new Set(arr.flatMap(x=>Object.keys(x||{})))).filter(k=>!exclude.has(k));
+
+  let keys = allKeys;
+  const preferred = (options.preferredOrder || []).filter(k=>allKeys.includes(k));
+  if(preferred.length){
+    const rest = allKeys.filter(k=>!preferred.includes(k));
+    keys = [...preferred, ...rest];
+  }
 
   const head = keys.map(k=>`<th>${escapeHtml(label(k))}</th>`).join('');
   const body = arr.map(x=>{
     const tds = keys.map(k=>{
       const v = x?.[k];
-      const cls = cellClassByKey(k);
-      return `<td class="${cls}">${renderScalar(v, k)}</td>`;
+      return `<td>${renderScalar(v, k)}</td>`;
     }).join('');
     return `<tr>${tds}</tr>`;
   }).join('');
@@ -269,29 +229,55 @@ function arrayTable(arr){
 async function load(){
   try{
     const r = await fetch('runs/latest_report.json?_=' + Date.now(), {cache:'no-store'});
-    if(!r.ok) throw new Error('report json not ready');
+    if(!r.ok) throw new Error();
     const d = await r.json();
 
     const ok = d.status === 'SUCCESS';
-    $('statusTag').textContent = ok ? '报告有效' : '法定占位';
+
+    // ① “法定占位”四字不要：失败状态改成“数据未就绪”
+    $('statusTag').textContent = ok ? '报告有效' : '数据未就绪';
     $('statusTag').className = 'tag ' + (ok ? 'ok' : 'fail');
 
     $('metaLine').textContent =
       `股票代码：${d.symbol || '02618.HK'} ｜ 交易日期：${d.trade_date || '未知'} ｜ 报告生成时间：${d.generated_at_bjt || '未知'}`;
 
     $('hint').textContent = d.report_reason || '';
+
     if(!ok) $('top').className = 'card bad';
 
     $('m1c').innerHTML = kvTable(d.module_1_market,'当日无真实交易数据（合规占位）');
-    $('m2c').innerHTML = kvTable(d.module_2_yesterday_review);
     $('m3c').innerHTML = arrayTable(d.module_3_t1_distribution);
     $('m4c').innerHTML = arrayTable(d.module_4_1m_distribution);
     $('m5c').innerHTML = arrayTable(d.module_5_6m_distribution);
+    $('m2c').innerHTML = kvTable(d.module_2_yesterday_review);
+
+    // ⑥：安全边界（limits）如果是对象/JSON字符串，会自动展开
     $('m6c').innerHTML = kvTable(d.module_6_model_state);
-    $('m7c').innerHTML = arrayTable(d.module_7_last5_hit);
+
+    // ⑦：去掉“股票代码”列；去掉所有“T+1”字样（仅显示名）；volume_percentile_20d 中文；run_id 可换行
+    $('m7c').innerHTML = arrayTable(d.module_7_last5_hit, {
+      excludeKeys: ['symbol'],
+      preferredOrder: [
+        'eval_date',
+        'target_trade_date',
+        'pred_ref_date',
+        'pred_median_t1',
+        'pred_p25_t1',
+        'pred_p75_t1',
+        'actual_close',
+        'abs_error',
+        'rel_error_pct',
+        'hit_bucket',
+        'judge',
+        'volume_percentile_20d',
+        'run_id',
+        'remark'
+      ]
+    });
 
   }catch(e){
-    $('statusTag').textContent = '法定占位';
+    // ① “法定占位”四字不要：失败状态改成“数据未就绪”
+    $('statusTag').textContent = '数据未就绪';
     $('statusTag').className = 'tag fail';
     $('metaLine').textContent = '法定界面已输出（数据文件尚未生成）';
     $('top').className = 'card bad';
