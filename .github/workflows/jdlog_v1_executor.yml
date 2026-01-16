@@ -21,6 +21,8 @@ jobs:
       SYMBOL: 02618.HK
       RUN_TYPE: AUTO
       DATA_SOURCE_URL: https://raw.githubusercontent.com/njedu2023-prog/xiaomi-data/main/jd-logistics-latest.json
+
+      # ✅ 只用这一种命名：repo secret 必须叫 HK_MARKET_API_TOKEN
       HK_MARKET_API_TOKEN: ${{ secrets.HK_MARKET_API_TOKEN }}
 
     steps:
@@ -39,11 +41,29 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # ✅ 安全自检：不泄露 secret 全文
+      - name: Debug env (safe)
+        shell: bash
+        run: |
+          echo "SYMBOL=$SYMBOL"
+          echo "RUN_TYPE=$RUN_TYPE"
+          echo "DATA_SOURCE_URL=$DATA_SOURCE_URL"
+          if [ -z "${HK_MARKET_API_TOKEN}" ]; then
+            echo "HK_MARKET_API_TOKEN=EMPTY"
+            exit 1
+          else
+            echo "HK_MARKET_API_TOKEN=SET"
+            echo "HK_MARKET_API_TOKEN_LEN=${#HK_MARKET_API_TOKEN}"
+            echo "HK_MARKET_API_TOKEN_HEAD=${HK_MARKET_API_TOKEN:0:4}****"
+            echo "HK_MARKET_API_TOKEN_TAIL=****${HK_MARKET_API_TOKEN: -4}"
+          fi
+
       - name: Run executor
         run: |
           python scripts/executor_v1.py
 
       - name: Commit changes (if any)
+        shell: bash
         run: |
           git status --porcelain
           if [ -n "$(git status --porcelain)" ]; then
