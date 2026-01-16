@@ -257,6 +257,23 @@ function arrayTable(arr, options={}){
   return `<div class="scrollX"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
+/* ===== 新增：非交易日判断（仅按周六/周日） ===== */
+function isNonTradingDayBJT(dateStr){
+  // 优先使用 trade_date（YYYY-MM-DD），否则用今天
+  let dt;
+  if(dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)){
+    // 用北京时间 00:00 来判断星期
+    dt = new Date(dateStr + 'T00:00:00+08:00');
+  }else{
+    // 直接用当前时间（本地）可能不可靠，这里也尽量按北京时间计算
+    const now = new Date();
+    const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
+    dt = new Date(utcMs + 8 * 3600000);
+  }
+  const day = dt.getDay(); // 0=周日, 6=周六
+  return (day === 0 || day === 6);
+}
+
 async function load(){
   try{
     const r = await fetch('runs/latest_report.json?_=' + Date.now(), {cache:'no-store'});
@@ -264,17 +281,29 @@ async function load(){
     const d = await r.json();
 
     const ok = d.status === 'SUCCESS';
+    const nonTrading = isNonTradingDayBJT(d.trade_date);
 
-    // 1. “法定占位”四字不要：失败改“数据未就绪”
-    $('statusTag').textContent = ok ? '报告有效' : '数据未就绪';
-    $('statusTag').className = 'tag ' + (ok ? 'ok' : 'fail');
+    /* ===== 改动点：状态文案更专业 ===== */
+    if(ok){
+      $('statusTag').textContent = '报告有效';
+      $('statusTag').className = 'tag ok';
+      $('hint').textContent = d.report_reason || '';
+    }else{
+      if(nonTrading){
+        $('statusTag').textContent = '非交易日';
+        $('statusTag').className = 'tag fail';
+        $('hint').textContent =
+          '当前为非交易日（港股未开市），系统已自动暂停数据抓取与预测生成；下一个交易日收盘后将自动更新。';
+      }else{
+        $('statusTag').textContent = '数据未就绪';
+        $('statusTag').className = 'tag fail';
+        $('hint').textContent = d.report_reason || '当日数据暂不可用，系统已输出合规占位界面。';
+      }
+      $('top').className = 'card bad';
+    }
 
     $('metaLine').textContent =
       `股票代码：${d.symbol||'02618.HK'} ｜ 交易日期：${d.trade_date||'未知'} ｜ 报告生成时间：${d.generated_at_bjt||'未知'}`;
-
-    $('hint').textContent = d.report_reason || '';
-
-    if(!ok) $('top').className = 'card bad';
 
     $('m1c').innerHTML = kvTable(d.module_1_market,'当日无真实交易数据（合规占位）');
 
@@ -286,15 +315,10 @@ async function load(){
     // ②
     $('m2c').innerHTML = kvTable(d.module_2_yesterday_review);
 
-    // ⑥（这里就会把你截图的英文都翻成中文）
+    // ⑥
     $('m6c').innerHTML = kvTable(d.module_6_model_state);
 
-    // ⑦：
-    // - 去掉“股票代码”列
-    // - 所有 “T+1” 不要：我们只改字段显示名（pred_median_t1 -> 预测中位价等）
-    // - volume_percentile_20d 中文
-    // - run_id 换行
-    // - 表格横向滚动，避免挤压
+    // ⑦
     $('m7c').innerHTML = arrayTable(d.module_7_last5_hit, {
       excludeKeys: ['symbol'],
       preferredOrder: [
@@ -316,9 +340,20 @@ async function load(){
     });
 
   }catch(e){
-    $('statusTag').textContent = '数据未就绪';
-    $('statusTag').className = 'tag fail';
-    $('metaLine').textContent = '法定界面已输出（数据文件尚未生成）';
+    // 取不到 JSON 的情况：也用“非交易日”更专业一点（按北京时间判断今天）
+    const nonTrading = isNonTradingDayBJT(null);
+
+    if(nonTrading){
+      $('statusTag').textContent = '非交易日';
+      $('statusTag').className = 'tag fail';
+      $('metaLine').textContent = '当前为非交易日（港股未开市），系统已自动暂停运行。';
+      $('hint').textContent = '下一个交易日收盘后将自动生成并更新报告。';
+    }else{
+      $('statusTag').textContent = '数据未就绪';
+      $('statusTag').className = 'tag fail';
+      $('metaLine').textContent = '法定界面已输出（数据文件尚未生成）';
+      $('hint').textContent = '';
+    }
     $('top').className = 'card bad';
   }
 }
