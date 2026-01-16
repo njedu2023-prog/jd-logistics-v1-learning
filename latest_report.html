@@ -32,7 +32,7 @@
       京东物流 V1.0 法定预测报告
       <span class="tag" id="statusTag">加载中</span>
     </h1>
-    <div class="meta" id="metaLine">正在读取 runs/latest_report.json ...</div>
+    <div class="meta" id="metaLine">正在读取 runs/latest_report.json …</div>
     <div class="small" id="hint"></div>
   </div>
 
@@ -47,8 +47,8 @@
   <div class="card">
     <div class="small">
       <b>合规声明：</b><br>
-      本报告严格遵循“真实数据优先”与“不得回填/估算”原则生成。<br>
-      若当日真实交易数据不可得，系统将输出完整法定界面结构，并明确标注为占位状态，不进行任何形式的数据推断或补全。
+      本报告严格遵循“真实数据优先”与“不得回填 / 估算”原则生成。<br>
+      若当日真实交易数据不可得，系统将输出完整法定界面结构，并明确标注为占位状态。
     </div>
   </div>
 
@@ -57,9 +57,28 @@
 <script>
 const $ = id => document.getElementById(id);
 
+const FIELD_ZH = {
+  trade_date: '交易日期',
+  open: '开盘价',
+  high: '最高价',
+  low: '最低价',
+  close: '收盘价',
+  volume: '成交量',
+  amount_yi_hkd: '成交额（亿港元）',
+  source: '数据来源',
+  source_url: '数据源地址',
+  fetched_at_bjt: '抓取时间（北京时间）',
+  raw_sha1: '数据校验指纹'
+};
+
 function escapeHtml(s){
   return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
 }
+
+function label(k){
+  return FIELD_ZH[k] || k;
+}
+
 function kvTable(obj, emptyHint){
   if(!obj || Object.keys(obj).length===0){
     return `<div class="small">${emptyHint || '暂无可用数据'}</div>`;
@@ -68,16 +87,17 @@ function kvTable(obj, emptyHint){
     const val = typeof v === 'object'
       ? `<span class="mono">${escapeHtml(JSON.stringify(v))}</span>`
       : escapeHtml(String(v));
-    return `<tr><td class="k">${escapeHtml(k)}</td><td>${val}</td></tr>`;
+    return `<tr><td class="k">${label(k)}</td><td>${val}</td></tr>`;
   }).join('');
   return `<table><tbody>${rows}</tbody></table>`;
 }
+
 function arrayTable(arr){
   if(!Array.isArray(arr) || arr.length===0){
     return '<div class="small">暂无数据</div>';
   }
   const keys = Array.from(new Set(arr.flatMap(x=>Object.keys(x||{}))));
-  const head = keys.map(k=>`<th>${escapeHtml(k)}</th>`).join('');
+  const head = keys.map(k=>`<th>${label(k)}</th>`).join('');
   const body = arr.map(x=>{
     const tds = keys.map(k=>{
       const v = x?.[k];
@@ -98,20 +118,17 @@ async function load(){
     const d = await r.json();
 
     const ok = d.status === 'SUCCESS';
-    $('statusTag').textContent = ok ? 'SUCCESS（报告有效）' : 'FAIL（法定占位）';
+    $('statusTag').textContent = ok ? '报告有效' : '法定占位';
     $('statusTag').className = 'tag ' + (ok ? 'ok' : 'fail');
 
     $('metaLine').textContent =
-      `symbol=${d.symbol||'02618.HK'} ｜ date=${d.trade_date||'未知'} ｜ generated_at=${d.generated_at_bjt||'未知'}`;
+      `股票代码：${d.symbol || '02618.HK'} ｜ 交易日期：${d.trade_date || '未知'} ｜ 报告生成时间：${d.generated_at_bjt || '未知'}`;
 
     $('hint').textContent = d.report_reason || '';
 
     if(!ok) $('top').className = 'card bad';
 
-    $('m1c').innerHTML = kvTable(
-      d.module_1_market,
-      '当日无真实交易数据（未回填，合规占位）'
-    );
+    $('m1c').innerHTML = kvTable(d.module_1_market,'当日无真实交易数据（合规占位）');
     $('m2c').innerHTML = kvTable(d.module_2_yesterday_review);
     $('m3c').innerHTML = arrayTable(d.module_3_t1_distribution);
     $('m4c').innerHTML = arrayTable(d.module_4_1m_distribution);
@@ -120,7 +137,7 @@ async function load(){
     $('m7c').innerHTML = arrayTable(d.module_7_last5_hit);
 
   }catch(e){
-    $('statusTag').textContent = 'FAIL（法定占位）';
+    $('statusTag').textContent = '法定占位';
     $('statusTag').className = 'tag fail';
     $('metaLine').textContent = '法定界面已输出（数据文件尚未生成）';
     $('top').className = 'card bad';
