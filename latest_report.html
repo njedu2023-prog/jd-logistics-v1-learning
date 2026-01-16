@@ -5,8 +5,12 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>京东物流 V1.0 法定预测报告</title>
   <style>
-    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",Arial;margin:20px;background:#f6f7f9;color:#111}
-    .wrap{max-width:1280px;margin:0 auto} /* ⑥ 页面更宽 */
+    body{
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",Arial;
+      margin:18px;background:#f6f7f9;color:#111
+    }
+    /* 6. 页面更宽一些 */
+    .wrap{max-width:1480px;margin:0 auto}
     .card{background:#fff;border:1px solid #e6e8eb;border-radius:12px;padding:18px;margin:14px 0;box-shadow:0 1px 2px rgba(0,0,0,.04)}
     h1{font-size:20px;margin:0 0 8px}
     h2{font-size:16px;margin:0 0 10px}
@@ -14,9 +18,9 @@
     .bad{background:#fff5f5;border-color:#ffd6d6}
     .bad .meta{color:#b00020}
     table{width:100%;border-collapse:collapse;font-size:13px}
-    th,td{border-bottom:1px solid #eee;padding:8px 6px;text-align:left;vertical-align:top}
+    th,td{border-bottom:1px solid #eee;padding:8px 8px;text-align:left;vertical-align:top}
     th{color:#444;font-weight:600;background:#fafafa;white-space:nowrap}
-    .k{color:#666;width:180px;white-space:nowrap}
+    .k{color:#666;width:220px;white-space:nowrap}
     .small{font-size:12px;color:#666;line-height:1.6}
     .tag{display:inline-block;padding:2px 8px;border-radius:999px;background:#f0f2f5;font-size:12px;color:#444;margin-left:8px}
     .ok{background:#ecfdf3;color:#0a6a2b}
@@ -25,7 +29,7 @@
     .mono-wrap{word-break:break-all;white-space:normal}
     .num{font-variant-numeric:tabular-nums}
     .scrollX{overflow:auto}
-    /* ③ 次日分布表：强制值靠左 */
+    /* 3. ③ 次日分布：值靠左对齐 */
     #m3c th, #m3c td { text-align:left !important; }
   </style>
 </head>
@@ -43,7 +47,7 @@
 
   <div class="card"><h2>① 当日实际交易数据</h2><div id="m1c"></div></div>
 
-  <!-- ② 位置调整：移到⑤下面、⑥上面（已按要求改） -->
+  <!-- 2. ② 昨日预测回顾 移到⑤下面、⑥上面 -->
   <div class="card"><h2>③ 次日价格分布预测</h2><div id="m3c"></div></div>
   <div class="card"><h2>④ 未来 1 个月价格分布预测</h2><div id="m4c"></div></div>
   <div class="card"><h2>⑤ 未来 6 个月价格分布预测</h2><div id="m5c"></div></div>
@@ -67,7 +71,7 @@ const $ = id => document.getElementById(id);
 
 /** 字段中文映射：找不到就回退原字段名 */
 const FIELD_ZH = {
-  // 模块①
+  // 顶部/模块①
   trade_date: '交易日期',
   open: '开盘价',
   high: '最高价',
@@ -84,25 +88,35 @@ const FIELD_ZH = {
   p: '分位点（P）',
   v: '价格（HKD）',
 
-  // 模块⑦（去掉“T+1”文字：只改显示名，不改底层字段）
-  eval_date: '评估日期',
-  target_trade_date: '目标交易日',
-  symbol: '股票代码',               // ⑤：会在模块⑦表格里被隐藏
-  actual_close: '实际收盘价',
-  pred_ref_date: '预测参考日',
-  pred_median_t1: '预测中位价',
-  pred_p25_t1: '预测 25 分位',
-  pred_p75_t1: '预测 75 分位',
-  abs_error: '绝对误差',
-  rel_error_pct: '相对误差（%）',
-  hit_bucket: '命中分位区间',
-  judge: '判断结果',
-  remark: '备注',
-  volume_percentile_20d: '近20日成交量分位',
+  // 模块②（常见字段，若有就翻）
+  pred_date: '预测日期',
+  pred_close: '预测收盘价',
+  reason: '说明',
+  note: '备注',
+
+  // 模块⑥：你截图里出现的“乱码/英文”字段（全部翻中文）
+  model_version: '模型版本',
+  symbol: '股票代码',
+  last_success_trade_date: '最近成功交易日',
+  last_run_id: '最近运行ID',
+  mu_base: '基础漂移μ',
+  sigma_short: '短期波动σ',
+  sigma_mid: '中期波动σ',
+  sigma_long: '长期波动σ',
+  enable_volume_factor: '启用成交量因子',
+  enable_beta_anchor: '启用β锚定',
+  beta_window: 'β计算窗口（天）',
+  volume_window: '量能计算窗口（天）',
+  safety_limits: '安全边界',
+  limits: '安全边界',
+  updated_at_bjt: '更新时间（北京时间）',
+  created_at_bjt: '创建时间（北京时间）',
+  sigma_base: '基础波动σ',
+  last_close: '最近收盘价',
+  last_trade_date: '最近交易日',
   run_id: '运行ID',
 
-  // ⑥ 安全边界（limits）常见字段：补中文，且会展开显示
-  limits: '安全边界',
+  // ⑥ 安全边界（safety_limits/limits）展开后的常见字段
   mu_min: 'μ 下限',
   mu_max: 'μ 上限',
   sigma_short_min: '短期σ下限',
@@ -116,7 +130,22 @@ const FIELD_ZH = {
   jump_mu_min: '跳跃均值下限',
   jump_mu_max: '跳跃均值上限',
   jump_sigma_min: '跳跃σ下限',
-  jump_sigma_max: '跳跃σ上限'
+  jump_sigma_max: '跳跃σ上限',
+
+  // 模块⑦（去掉“T+1”字样：只改显示名）
+  eval_date: '评估日期',
+  target_trade_date: '目标交易日',
+  actual_close: '实际收盘价',
+  pred_ref_date: '预测参考日',
+  pred_median_t1: '预测中位价',
+  pred_p25_t1: '预测 25 分位',
+  pred_p75_t1: '预测 75 分位',
+  abs_error: '绝对误差',
+  rel_error_pct: '相对误差（%）',
+  hit_bucket: '命中分位区间',
+  judge: '判断结果',
+  remark: '备注',
+  volume_percentile_20d: '近20日成交量分位'
 };
 
 function label(k){ return FIELD_ZH[k] || k; }
@@ -130,7 +159,7 @@ function escapeHtml(s){
     .replaceAll("'","&#39;");
 }
 
-/** 数值格式：价格/误差/分位值保留2位；成交量千分位；百分比也保留2位 */
+/** 数值格式：统一更专业（两位小数 + 千分位 + 百分比两位） */
 function isNumber(x){ return typeof x === 'number' && Number.isFinite(x); }
 function fmtNumber(n, digits=2){ return n.toFixed(digits); }
 
@@ -162,20 +191,24 @@ function tryParseJsonObject(str){
   }
 }
 
+/** ⑥：把 safety_limits / limits 展开成更好懂的子表（如果是对象或JSON字符串） */
 function renderScalar(v, k){
   if(v == null) return '';
 
-  // ⑥ 安全边界：对象/可解析JSON字符串 -> 直接展开成表格（更好懂）
-  if(typeof v === 'object' && !Array.isArray(v)){
+  // 安全边界：对象/可解析JSON字符串 -> 展开
+  if((k === 'safety_limits' || k === 'limits') && typeof v === 'string'){
+    const parsed = tryParseJsonObject(v);
+    if(parsed){
+      return `<div class="scrollX">${kvTable(parsed)}</div>`;
+    }
+  }
+  if((k === 'safety_limits' || k === 'limits') && typeof v === 'object' && !Array.isArray(v)){
     return `<div class="scrollX">${kvTable(v)}</div>`;
   }
-  const parsed = tryParseJsonObject(v);
-  if(parsed){
-    return `<div class="scrollX">${kvTable(parsed)}</div>`;
-  }
 
-  // run_id 这种长字段：强制可换行
-  if(k === 'run_id'){
+  // 运行ID换行显示
+  if(k === 'run_id' || k === 'last_run_id'){
+    if(!v) return '';
     return `<span class="mono mono-wrap">${escapeHtml(String(v))}</span>`;
   }
 
@@ -183,6 +216,7 @@ function renderScalar(v, k){
   return `<span class="num">${escapeHtml(s)}</span>`;
 }
 
+/** KV 表：自动把 key 翻译成中文 */
 function kvTable(obj, emptyHint){
   if(!obj || Object.keys(obj).length===0){
     return `<div class="small">${emptyHint || '暂无可用数据'}</div>`;
@@ -194,10 +228,7 @@ function kvTable(obj, emptyHint){
 }
 
 /**
- * 数组表格：支持隐藏列、固定列顺序
- * options:
- *  - excludeKeys: string[]
- *  - preferredOrder: string[]
+ * 数组表格：支持隐藏列、固定列顺序、并把表格包一层横向滚动（解决挤压不美观）
  */
 function arrayTable(arr, options={}){
   if(!Array.isArray(arr) || arr.length===0){
@@ -234,27 +265,36 @@ async function load(){
 
     const ok = d.status === 'SUCCESS';
 
-    // ① “法定占位”四字不要：失败状态改成“数据未就绪”
+    // 1. “法定占位”四字不要：失败改“数据未就绪”
     $('statusTag').textContent = ok ? '报告有效' : '数据未就绪';
     $('statusTag').className = 'tag ' + (ok ? 'ok' : 'fail');
 
     $('metaLine').textContent =
-      `股票代码：${d.symbol || '02618.HK'} ｜ 交易日期：${d.trade_date || '未知'} ｜ 报告生成时间：${d.generated_at_bjt || '未知'}`;
+      `股票代码：${d.symbol||'02618.HK'} ｜ 交易日期：${d.trade_date||'未知'} ｜ 报告生成时间：${d.generated_at_bjt||'未知'}`;
 
     $('hint').textContent = d.report_reason || '';
 
     if(!ok) $('top').className = 'card bad';
 
     $('m1c').innerHTML = kvTable(d.module_1_market,'当日无真实交易数据（合规占位）');
+
+    // ③/④/⑤
     $('m3c').innerHTML = arrayTable(d.module_3_t1_distribution);
     $('m4c').innerHTML = arrayTable(d.module_4_1m_distribution);
     $('m5c').innerHTML = arrayTable(d.module_5_6m_distribution);
+
+    // ②
     $('m2c').innerHTML = kvTable(d.module_2_yesterday_review);
 
-    // ⑥：安全边界（limits）如果是对象/JSON字符串，会自动展开
+    // ⑥（这里就会把你截图的英文都翻成中文）
     $('m6c').innerHTML = kvTable(d.module_6_model_state);
 
-    // ⑦：去掉“股票代码”列；去掉所有“T+1”字样（仅显示名）；volume_percentile_20d 中文；run_id 可换行
+    // ⑦：
+    // - 去掉“股票代码”列
+    // - 所有 “T+1” 不要：我们只改字段显示名（pred_median_t1 -> 预测中位价等）
+    // - volume_percentile_20d 中文
+    // - run_id 换行
+    // - 表格横向滚动，避免挤压
     $('m7c').innerHTML = arrayTable(d.module_7_last5_hit, {
       excludeKeys: ['symbol'],
       preferredOrder: [
@@ -276,7 +316,6 @@ async function load(){
     });
 
   }catch(e){
-    // ① “法定占位”四字不要：失败状态改成“数据未就绪”
     $('statusTag').textContent = '数据未就绪';
     $('statusTag').className = 'tag fail';
     $('metaLine').textContent = '法定界面已输出（数据文件尚未生成）';
