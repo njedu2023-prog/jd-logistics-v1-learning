@@ -3,11 +3,15 @@ name: JD Logistics V1.0 Executor
 on:
   workflow_dispatch: {}
   schedule:
-    # 北京时间 17:00 = UTC 09:00
+    # 北京时间 17:00 = UTC 09:00（周一到周五）
     - cron: "0 9 * * 1-5"
 
 permissions:
   contents: write
+
+concurrency:
+  group: jdlog-v1-executor
+  cancel-in-progress: true
 
 jobs:
   run:
@@ -17,6 +21,7 @@ jobs:
       SYMBOL: 02618.HK
       RUN_TYPE: AUTO
       DATA_SOURCE_URL: https://raw.githubusercontent.com/njedu2023-prog/xiaomi-data/main/jd-logistics-latest.json
+      HK_MARKET_API_TOKEN: ${{ secrets.HK_MARKET_API_TOKEN }}
 
     steps:
       - name: Checkout
