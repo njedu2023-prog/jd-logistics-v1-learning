@@ -15,13 +15,15 @@
     .bad .meta{color:#b00020}
     table{width:100%;border-collapse:collapse;font-size:13px}
     th,td{border-bottom:1px solid #eee;padding:8px 6px;text-align:left;vertical-align:top}
-    th{color:#444;font-weight:600;background:#fafafa}
-    .k{color:#666;width:180px}
+    th{color:#444;font-weight:600;background:#fafafa;white-space:nowrap}
+    .k{color:#666;width:180px;white-space:nowrap}
     .small{font-size:12px;color:#666;line-height:1.6}
     .tag{display:inline-block;padding:2px 8px;border-radius:999px;background:#f0f2f5;font-size:12px;color:#444;margin-left:8px}
     .ok{background:#ecfdf3;color:#0a6a2b}
     .fail{background:#fff1f0;color:#b42318}
     .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New";font-size:12px}
+    .num{font-variant-numeric:tabular-nums}
+    .scrollX{overflow:auto}
   </style>
 </head>
 <body>
@@ -32,7 +34,7 @@
       京东物流 V1.0 法定预测报告
       <span class="tag" id="statusTag">加载中</span>
     </h1>
-    <div class="meta" id="metaLine">正在读取 runs/latest_report.json …</div>
+    <div class="meta" id="metaLine">正在读取 runs/latest_report.json ...</div>
     <div class="small" id="hint"></div>
   </div>
 
@@ -48,7 +50,7 @@
     <div class="small">
       <b>合规声明：</b><br>
       本报告严格遵循“真实数据优先”与“不得回填 / 估算”原则生成。<br>
-      若当日真实交易数据不可得，系统将输出完整法定界面结构，并明确标注为占位状态。
+      若当日真实交易数据不可得，系统将输出完整法定界面结构，并明确标注为占位状态，不进行任何形式的数据推断或补全。
     </div>
   </div>
 
@@ -57,7 +59,9 @@
 <script>
 const $ = id => document.getElementById(id);
 
+/** 字段中文映射：找不到就回退原字段名 */
 const FIELD_ZH = {
+  // 模块①
   trade_date: '交易日期',
   open: '开盘价',
   high: '最高价',
@@ -68,15 +72,70 @@ const FIELD_ZH = {
   source: '数据来源',
   source_url: '数据源地址',
   fetched_at_bjt: '抓取时间（北京时间）',
-  raw_sha1: '数据校验指纹'
+  raw_sha1: '数据校验指纹',
+
+  // 分布表
+  p: '分位点（P）',
+  v: '价格（HKD）',
+
+  // 模块⑦常见字段（不全也没关系，未命中会原样显示）
+  eval_date: '评估日期',
+  target_trade_date: '目标交易日',
+  symbol: '股票代码',
+  actual_close: '实际收盘价',
+  pred_ref_date: '预测参考日',
+  pred_median_t1: '预测中位价（T+1）',
+  pred_p25_t1: '预测 25 分位（T+1）',
+  pred_p75_t1: '预测 75 分位（T+1）',
+  abs_error: '绝对误差',
+  rel_error_pct: '相对误差（%）',
+  hit_bucket: '命中分位区间',
+  judge: '判断结果',
+  remark: '备注'
 };
+
+function label(k){ return FIELD_ZH[k] || k; }
 
 function escapeHtml(s){
   return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
 }
 
-function label(k){
-  return FIELD_ZH[k] || k;
+/** 数值格式：价格/误差/分位值保留2位；成交量千分位；百分比也保留2位 */
+function isNumber(x){ return typeof x === 'number' && Number.isFinite(x); }
+
+function fmtNumber(n, digits=2){
+  return n.toFixed(digits);
+}
+
+function fmtValueByKey(v, k){
+  if(!isNumber(v)) return String(v);
+
+  // 成交量：整数 + 千分位
+  if(k === 'volume'){
+    return Math.round(v).toLocaleString('zh-CN');
+  }
+
+  // 分位点 p：通常 0.05 / 0.25 / 0.5 ...，保留2位即可
+  if(k === 'p'){
+    return fmtNumber(v, 2);
+  }
+
+  // 相对误差百分比：如果字段本身已是 pct 就直接2位
+  if(String(k).toLowerCase().includes('rel_error') && String(k).toLowerCase().includes('pct')){
+    return fmtNumber(v, 2);
+  }
+
+  // 其他所有数值：统一2位（价格、误差、分位价格等）
+  return fmtNumber(v, 2);
+}
+
+function renderScalar(v, k){
+  if(v == null) return '';
+  if(typeof v === 'object'){
+    return `<span class="mono">${escapeHtml(JSON.stringify(v))}</span>`;
+  }
+  const s = isNumber(v) ? fmtValueByKey(v, k) : String(v);
+  return `<span class="num">${escapeHtml(s)}</span>`;
 }
 
 function kvTable(obj, emptyHint){
@@ -84,10 +143,7 @@ function kvTable(obj, emptyHint){
     return `<div class="small">${emptyHint || '暂无可用数据'}</div>`;
   }
   const rows = Object.entries(obj).map(([k,v])=>{
-    const val = typeof v === 'object'
-      ? `<span class="mono">${escapeHtml(JSON.stringify(v))}</span>`
-      : escapeHtml(String(v));
-    return `<tr><td class="k">${label(k)}</td><td>${val}</td></tr>`;
+    return `<tr><td class="k">${escapeHtml(label(k))}</td><td>${renderScalar(v, k)}</td></tr>`;
   }).join('');
   return `<table><tbody>${rows}</tbody></table>`;
 }
@@ -97,18 +153,17 @@ function arrayTable(arr){
     return '<div class="small">暂无数据</div>';
   }
   const keys = Array.from(new Set(arr.flatMap(x=>Object.keys(x||{}))));
-  const head = keys.map(k=>`<th>${label(k)}</th>`).join('');
+
+  const head = keys.map(k=>`<th>${escapeHtml(label(k))}</th>`).join('');
   const body = arr.map(x=>{
     const tds = keys.map(k=>{
       const v = x?.[k];
-      const val = typeof v === 'object'
-        ? `<span class="mono">${escapeHtml(JSON.stringify(v))}</span>`
-        : escapeHtml(v==null?'':String(v));
-      return `<td>${val}</td>`;
+      return `<td>${renderScalar(v, k)}</td>`;
     }).join('');
     return `<tr>${tds}</tr>`;
   }).join('');
-  return `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+
+  return `<div class="scrollX"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
 async function load(){
