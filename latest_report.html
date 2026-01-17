@@ -19,11 +19,11 @@
     .bad .meta{color:#b00020}
     table{width:100%;border-collapse:collapse;font-size:13px}
     th,td{border-bottom:1px solid #eee;padding:8px 8px;text-align:left;vertical-align:top}
-/* 仅让“安全边界”这一行左侧标题垂直居中 */
-#safeBoundaryRow td:first-child{
-  vertical-align: middle;
-}   
-    th{color:#444;font-weight:600;background:#fafafa;white-space:nowrap}  
+    /* 仅让“安全边界”这一行左侧标题垂直居中 */
+    #safeBoundaryRow td:first-child{
+      vertical-align: middle;
+    }
+    th{color:#444;font-weight:600;background:#fafafa;white-space:nowrap}
     .k{color:#666;width:220px;white-space:nowrap}
     .small{font-size:12px;color:#666;line-height:1.6}
     .tag{display:inline-block;padding:2px 8px;border-radius:999px;background:#f0f2f5;font-size:12px;color:#444;margin-left:8px}
@@ -98,7 +98,12 @@ const FIELD_ZH = {
   reason: '说明',
   note: '备注',
 
-  // 模块⑥：你截图里出现的“乱码/英文”字段（全部翻中文）
+  // ===== 关键：把你截图里那几个英文新字段翻成中文（⑥用）=====
+  sigma_1m: '1个月波动率（EWMA，年化）',
+  sigma_6m: '6个月波动率（EWMA，年化）',
+  t_nu: '收益分布厚尾参数（t分布ν）',
+
+  // 模块⑥：其它字段翻译
   model_version: '模型版本',
   symbol: '股票代码',
   last_success_trade_date: '最近成功交易日',
@@ -107,8 +112,8 @@ const FIELD_ZH = {
   sigma_short: '短期波动σ',
   sigma_mid: '中期波动σ',
   sigma_long: '长期波动σ',
-  enable_volume_factor: '启用成交量因子',
-  enable_beta_anchor: '启用β锚定',
+  enable_volume_factor: '是否启用成交量因子',
+  enable_beta_anchor: '是否启用β锚定',
   beta_window: 'β计算窗口（天）',
   volume_window: '量能计算窗口（天）',
   safety_limits: '安全边界',
@@ -199,6 +204,18 @@ function tryParseJsonObject(str){
 function renderScalar(v, k){
   if(v == null) return '';
 
+  // ✅ 布尔值：按你截图显示“是/否”
+  if(typeof v === 'boolean'){
+    return `<span class="num">${v ? '是' : '否'}</span>`;
+  }
+  // 兼容某些地方可能把 bool 写成字符串
+  if(typeof v === 'string'){
+    const s = v.trim().toLowerCase();
+    if(s === 'true' || s === 'false'){
+      return `<span class="num">${s === 'true' ? '是' : '否'}</span>`;
+    }
+  }
+
   // 安全边界：对象/可解析JSON字符串 -> 展开
   if((k === 'safety_limits' || k === 'limits') && typeof v === 'string'){
     const parsed = tryParseJsonObject(v);
@@ -220,15 +237,38 @@ function renderScalar(v, k){
   return `<span class="num">${escapeHtml(s)}</span>`;
 }
 
-/** KV 表：自动把 key 翻译成中文 */
-function kvTable(obj, emptyHint){
+/** KV 表：自动把 key 翻译成中文 + ✅ 加表头（字段/当前值） */
+function kvTable(obj, emptyHint, options={}){
   if(!obj || Object.keys(obj).length===0){
     return `<div class="small">${emptyHint || '暂无可用数据'}</div>`;
   }
-  const rows = Object.entries(obj).map(([k,v])=>{
-    return `<tr ${label(k)==='安全边界' ? 'id="safeBoundaryRow"' : ''}><td class="k">${escapeHtml(label(k))}</td><td>${renderScalar(v, k)}</td></tr>`;
+
+  const exclude = new Set(options.excludeKeys || []);
+  const allKeys = Object.keys(obj).filter(k => !exclude.has(k));
+
+  let keys = allKeys;
+  const preferred = (options.preferredOrder || []).filter(k=>allKeys.includes(k));
+  if(preferred.length){
+    const rest = allKeys.filter(k=>!preferred.includes(k));
+    keys = [...preferred, ...rest];
+  }
+
+  const rows = keys.map((k)=>{
+    const v = obj[k];
+    return `<tr ${label(k)==='安全边界' ? 'id="safeBoundaryRow"' : ''}>
+      <td class="k">${escapeHtml(label(k))}</td>
+      <td>${renderScalar(v, k)}</td>
+    </tr>`;
   }).join('');
-  return `<table><tbody>${rows}</tbody></table>`;
+
+  return `
+    <table>
+      <thead>
+        <tr><th>字段</th><th>当前值</th></tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
 }
 
 /**
@@ -263,19 +303,39 @@ function arrayTable(arr, options={}){
 
 /* ===== 新增：非交易日判断（仅按周六/周日） ===== */
 function isNonTradingDayBJT(dateStr){
-  // 优先使用 trade_date（YYYY-MM-DD），否则用今天
   let dt;
   if(dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)){
-    // 用北京时间 00:00 来判断星期
     dt = new Date(dateStr + 'T00:00:00+08:00');
   }else{
-    // 直接用当前时间（本地）可能不可靠，这里也尽量按北京时间计算
     const now = new Date();
     const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
     dt = new Date(utcMs + 8 * 3600000);
   }
   const day = dt.getDay(); // 0=周日, 6=周六
   return (day === 0 || day === 6);
+}
+
+/** ✅ ⑥：只取你截图那一组关键字段（顺序固定），保证界面“像截图” */
+function pickModelState(st){
+  if(!st || typeof st !== 'object') return st;
+
+  const preferredOrder = [
+    'model_version',
+    'symbol',
+    'sigma_1m',
+    'sigma_6m',
+    't_nu',
+    'enable_volume_factor',
+    'enable_beta_anchor',
+    'beta_window',
+    'volume_window'
+  ];
+
+  const out = {};
+  for(const k of preferredOrder){
+    if(k in st) out[k] = st[k];
+  }
+  return out;
 }
 
 async function load(){
@@ -287,7 +347,6 @@ async function load(){
     const ok = d.status === 'SUCCESS';
     const nonTrading = isNonTradingDayBJT(d.trade_date);
 
-    /* ===== 改动点：状态文案更专业 ===== */
     if(ok){
       $('statusTag').textContent = '报告有效';
       $('statusTag').className = 'tag ok';
@@ -319,8 +378,9 @@ async function load(){
     // ②
     $('m2c').innerHTML = kvTable(d.module_2_yesterday_review);
 
-    // ⑥
-    $('m6c').innerHTML = kvTable(d.module_6_model_state);
+    // ⑥：用截图同款字段 + 同款顺序
+    const m6 = pickModelState(d.module_6_model_state);
+    $('m6c').innerHTML = kvTable(m6);
 
     // ⑦
     $('m7c').innerHTML = arrayTable(d.module_7_last5_hit, {
@@ -344,7 +404,6 @@ async function load(){
     });
 
   }catch(e){
-    // 取不到 JSON 的情况：也用“非交易日”更专业一点（按北京时间判断今天）
     const nonTrading = isNonTradingDayBJT(null);
 
     if(nonTrading){
