@@ -1,54 +1,10 @@
-name: JD Logistics V1.0 Executor (5min Test)
+name: JD Logistics V1.0 Executor
 
 on:
   workflow_dispatch: {}
   schedule:
-    - cron: "*/5 * * * *"
-
-permissions:
-  contents: write
-
-concurrency:
-  group: jdlog-v1-executor-test
-  cancel-in-progress: true
-
-jobs:
-  run:
-    runs-on: ubuntu-latest
-    env:
-      TZ: Asia/Shanghai
-      SYMBOL: 02618.HK
-      RUN_TYPE: AUTO_TEST
-      DATA_SOURCE_URL: https://raw.githubusercontent.com/njedu2023-prog/jd-logistics-v1-learning/main/jd-logistics-latest.json
-      HK_MARKET_API_TOKEN: ${{ secrets.HK_MARKET_API_TOKEN }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install deps
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Debug env (safe)
-        run: |
-          echo "AUTO TEST RUN"
-          if [ -z "${HK_MARKET_API_TOKEN}" ]; then exit 1; fi
-
-      - name: Run executor
-        run: |
-          python scripts/executor_v1.py
-
-
-
+    # 北京时间 17:00 = UTC 09:00（周一到周五）
+    - cron: "0 9 * * 1-5"
 permissions:
   contents: write
 
