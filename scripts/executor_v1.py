@@ -43,7 +43,7 @@ MODEL_VERSION = "V1.0"
 SYMBOL = "02618.HK"
 
 # 模块①唯一数据源（当前仍是 GitHub Raw JSON）
-MARKET_URL = "https://raw.githubusercontent.com/njedu2023-prog/jd-logistics-v1-learning/main/jd-logistics-latest.json"
+MARKET_URL = "https://raw.githubusercontent.com/njedu2023-prog/xiaomi-data/main/jd-logistics-latest.json"
 
 # 输出路径（仓库内）
 RUN_LOG_PATH = "runs/run_log.jsonl"
