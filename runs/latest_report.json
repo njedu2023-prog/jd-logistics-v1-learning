@@ -1,122 +1,122 @@
 {
   "status": "SUCCESS",
   "symbol": "02618.HK",
-  "trade_date": "2026-01-16",
-  "generated_at_bjt": "2026-01-19T17:59:58",
+  "trade_date": "2026-01-19",
+  "generated_at_bjt": "2026-01-20T02:25:21",
   "report_reason": "当日真实数据拉取成功；EWMA更新sigma；t分布预测写入完成。",
   "module_1_market": {
-    "trade_date": "2026-01-16",
-    "open": 11.76,
-    "high": 11.77,
-    "low": 11.48,
-    "close": 11.51,
-    "volume": 10099705,
-    "amount_yi_hkd": 1.1625,
+    "trade_date": "2026-01-19",
+    "open": 11.46,
+    "high": 11.48,
+    "low": 11.27,
+    "close": 11.27,
+    "volume": 10494059,
+    "amount_yi_hkd": 1.1827,
     "source": "github_raw_json",
-    "source_url": "https://raw.githubusercontent.com/njedu2023-prog/jd-logistics-v1-learning/main/jd-logistics-latest.json",
-    "fetched_at_bjt": "2026-01-19T17:59:58",
-    "raw_sha1": "0f2e4c9bb66465ef2c85eb09b16e4b6fb0e1888e"
+    "source_url": "https://raw.githubusercontent.com/njedu2023-prog/xiaomi-data/main/jd-logistics-latest.json",
+    "fetched_at_bjt": "2026-01-20T02:25:20",
+    "raw_sha1": "6eb80b50bb15ec6040c4340184c62c03dc156912"
   },
   "module_2_yesterday_review": {
-    "eval_date": "2026-01-16",
-    "target_trade_date": "2026-01-16",
+    "eval_date": "2026-01-19",
+    "target_trade_date": "2026-01-19",
     "symbol": "02618.HK",
-    "actual_close": 11.51,
+    "actual_close": 11.27,
     "pred_ref_date": "2026-01-16",
-    "pred_median_t1": 11.508493285441203,
-    "pred_p25_t1": 11.397113187896371,
-    "pred_p75_t1": 11.620961862667214,
-    "abs_error": 0.0015067145587970288,
-    "rel_error_pct": 0.013092196531956925,
-    "hit_band": "MID(P25~P75)",
-    "amount_yi_hkd": 1.1625,
+    "pred_median_t1": 11.508894196864604,
+    "pred_p25_t1": 11.413407128281733,
+    "pred_p75_t1": 11.605180131216835,
+    "abs_error": 0.23889419686460478,
+    "rel_error_pct": 2.0757354510191544,
+    "hit_band": "LOW(<P25)",
+    "amount_yi_hkd": 1.1827,
     "volume_percentile_20d": null,
     "enable_volume_factor": false,
     "enable_beta_anchor": false,
-    "run_id": "eeb9e0de9f324498",
+    "run_id": "edb7a91459834c5c",
     "model_version": "V1.0"
   },
   "module_3_t1_distribution": [
     {
       "p": 0.05,
-      "v": 11.256256593475634
+      "v": 11.043712685879084
     },
     {
       "p": 0.25,
-      "v": 11.413407128281733
+      "v": 11.183967026582415
     },
     {
       "p": 0.5,
-      "v": 11.508894196864604
+      "v": 11.26910292161636
     },
     {
       "p": 0.75,
-      "v": 11.605180131216835
+      "v": 11.35488689801589
     },
     {
       "p": 0.95,
-      "v": 11.76720204756147
+      "v": 11.499093128378838
     }
   ],
   "module_4_1m_distribution": [
     {
       "p": 0.05,
-      "v": 10.37587711496779
+      "v": 10.256266228978415
     },
     {
       "p": 0.25,
-      "v": 11.056508292023542
+      "v": 10.866892428382503
     },
     {
       "p": 0.5,
-      "v": 11.486800430589525
+      "v": 11.251176341721408
     },
     {
       "p": 0.75,
-      "v": 11.933838482026141
+      "v": 11.649049616234567
     },
     {
       "p": 0.95,
-      "v": 12.71666796649425
+      "v": 12.34259780765466
     }
   ],
   "module_5_6m_distribution": [
     {
       "p": 0.05,
-      "v": 7.826291781003173
+      "v": 7.883747450289485
     },
     {
       "p": 0.25,
-      "v": 9.802219087099745
+      "v": 9.72121377249407
     },
     {
       "p": 0.5,
-      "v": 11.222112645200669
+      "v": 11.025446294905507
     },
     {
       "p": 0.75,
-      "v": 12.847683886938533
+      "v": 12.504659278844155
     },
     {
       "p": 0.95,
-      "v": 16.091377084516303
+      "v": 15.419122285225148
     }
   ],
   "module_6_model_state": {
     "model_version": "V1.0",
     "created_at_bjt": "2026-01-15T15:33:33",
-    "updated_at_bjt": "2026-01-19T17:59:58",
+    "updated_at_bjt": "2026-01-20T02:25:21",
     "symbol": "02618.HK",
     "last_success_trade_date": null,
     "last_run_id": null,
     "mu_base": 0.0,
-    "sigma_base": 0.22005282399474216,
-    "sigma_1m": 0.22005282399474216,
-    "sigma_6m": 0.3183083257816017,
+    "sigma_base": 0.20029824716695305,
+    "sigma_1m": 0.20029824716695305,
+    "sigma_6m": 0.29623252538869554,
     "t_nu": 7.0,
-    "sigma_short": 0.22005282399474216,
-    "sigma_mid": 0.22005282399474216,
-    "sigma_long": 0.3183083257816017,
+    "sigma_short": 0.20029824716695305,
+    "sigma_mid": 0.20029824716695305,
+    "sigma_long": 0.29623252538869554,
     "enable_volume_factor": false,
     "enable_beta_anchor": false,
     "beta_window": 60,
@@ -131,29 +131,10 @@
       "sigma_long_min": 0.005,
       "sigma_long_max": 2.0
     },
-    "last_close": 11.51,
-    "last_trade_date": "2026-01-16"
+    "last_close": 11.27,
+    "last_trade_date": "2026-01-19"
   },
   "module_7_last5_hit": [
-    {
-      "eval_date": "2026-01-16",
-      "target_trade_date": "2026-01-16",
-      "symbol": "02618.HK",
-      "actual_close": 11.51,
-      "pred_ref_date": "2026-01-16",
-      "pred_median_t1": 11.50720277051041,
-      "pred_p25_t1": 11.355722734406008,
-      "pred_p75_t1": 11.660703479527921,
-      "abs_error": 0.00279722948958927,
-      "rel_error_pct": 0.024308509595031644,
-      "hit_band": "MID(P25~P75)",
-      "amount_yi_hkd": 1.1625,
-      "volume_percentile_20d": null,
-      "enable_volume_factor": false,
-      "enable_beta_anchor": false,
-      "run_id": "b745ca341bb14d38",
-      "model_version": "V1.0"
-    },
     {
       "eval_date": "2026-01-16",
       "target_trade_date": "2026-01-16",
@@ -228,6 +209,25 @@
       "enable_volume_factor": false,
       "enable_beta_anchor": false,
       "run_id": "eeb9e0de9f324498",
+      "model_version": "V1.0"
+    },
+    {
+      "eval_date": "2026-01-19",
+      "target_trade_date": "2026-01-19",
+      "symbol": "02618.HK",
+      "actual_close": 11.27,
+      "pred_ref_date": "2026-01-16",
+      "pred_median_t1": 11.508894196864604,
+      "pred_p25_t1": 11.413407128281733,
+      "pred_p75_t1": 11.605180131216835,
+      "abs_error": 0.23889419686460478,
+      "rel_error_pct": 2.0757354510191544,
+      "hit_band": "LOW(<P25)",
+      "amount_yi_hkd": 1.1827,
+      "volume_percentile_20d": null,
+      "enable_volume_factor": false,
+      "enable_beta_anchor": false,
+      "run_id": "edb7a91459834c5c",
       "model_version": "V1.0"
     }
   ]
