@@ -3,7 +3,7 @@ name: JD Logistics V1.0 Executor
 on:
   workflow_dispatch: {}
   schedule:
-    - cron: "25 21 * * *"   # 每天北京时间 05:25
+    - cron: "0 9 * * *"   # 每天北京时间 17:00
 
 
 
