@@ -3,10 +3,9 @@ name: JD Logistics V1.0 Executor
 on:
   workflow_dispatch: {}
   schedule:
-    - cron: "0 9 * * *"   # 每天北京时间 17:00
-
-
-
+    # GitHub Actions 的 cron 是 UTC；UTC 09:00 = 北京时间 17:00
+    # 周一到周五执行（港股周末休市，避免无意义运行）
+    - cron: "0 9 * * 1-5"
 
 permissions:
   contents: write
@@ -18,12 +17,14 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       TZ: Asia/Shanghai
+      PYTHONUNBUFFERED: "1"
       SYMBOL: 02618.HK
       RUN_TYPE: AUTO
       DATA_SOURCE_URL: https://raw.githubusercontent.com/njedu2023-prog/JD-data/main/jd-logistics-latest.json
-      # ✅ 只用这一种命名：repo secret 必须叫 HK_MARKET_API_TOKEN
+      # ✅ repo secret 必须叫 HK_MARKET_API_TOKEN
       HK_MARKET_API_TOKEN: ${{ secrets.HK_MARKET_API_TOKEN }}
 
     steps:
@@ -36,6 +37,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
 
       - name: Install deps
         run: |
@@ -70,6 +72,10 @@ jobs:
           if [ -n "$(git status --porcelain)" ]; then
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
+
+            # 先同步远端，避免 push non-fast-forward
+            git pull --rebase
+
             git add -A
             git commit -m "JD Logistics V1.0: update logs/market/pred/eval/state"
             git push
