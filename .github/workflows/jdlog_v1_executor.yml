@@ -1,7 +1,15 @@
 name: JD Logistics V1.0 Executor
 
-schedule:
-  - cron: "*/10 * * * *"
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - ".github/workflows/**"
+
 
 
 
