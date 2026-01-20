@@ -1,11 +1,8 @@
 name: JD Logistics V1.0 Executor
 
-on:
-  workflow_dispatch: {}
-  schedule:
-    # GitHub Actions 的 cron 是 UTC；UTC 09:00 = 北京时间 17:00
-    # 周一到周五执行（港股周末休市，避免无意义运行）
-    - cron: "0 9 * * 1-5"
+schedule:
+  - cron: "*/10 * * * *"
+
 
 permissions:
   contents: write
