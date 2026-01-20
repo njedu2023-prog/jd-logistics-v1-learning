@@ -1,23 +1,17 @@
 {
   "model_version": "V1.0",
   "created_at_bjt": "2026-01-01T00:00:00",
-  "updated_at_bjt": "2026-01-01T00:00:00",
-
-  "sigma_base": 0.35,
+  "updated_at_bjt": "2026-01-20T14:54:36",
+  "sigma_base": 0.2508620849881056,
   "mu_base": 0.0,
-
-  "sigma_1m": 0.35,
-  "sigma_6m": 0.40,
-
+  "sigma_1m": 0.2508620849881056,
+  "sigma_6m": 0.3373587419037929,
   "t_nu": 7.0,
-
-  "last_close": null,
-  "last_trade_date": null,
-
-  "sigma_short": 0.35,
-  "sigma_mid": 0.35,
-  "sigma_long": 0.40,
-
+  "last_close": 11.27,
+  "last_trade_date": "2026-01-19",
+  "sigma_short": 0.2508620849881056,
+  "sigma_mid": 0.2508620849881056,
+  "sigma_long": 0.3373587419037929,
   "enable_volume_factor": false,
   "enable_beta_anchor": false
 }
