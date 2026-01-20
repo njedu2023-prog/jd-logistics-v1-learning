@@ -68,17 +68,24 @@ jobs:
       - name: Commit changes (if any)
         shell: bash
         run: |
+          set -e
           git status --porcelain
-          if [ -n "$(git status --porcelain)" ]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
 
-            # 先同步远端，避免 push non-fast-forward
-            git pull --rebase
-
-            git add -A
-            git commit -m "JD Logistics V1.0: update logs/market/pred/eval/state"
-            git push
-          else
+          # 没有变化就直接结束
+          if [ -z "$(git status --porcelain)" ]; then
             echo "No changes to commit."
+            exit 0
           fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # 关键修复：先 add+commit，让工作区变干净，再 pull --rebase
+          git add -A
+          git commit -m "JD Logistics V1.0: update logs/market/pred/eval/state" || true
+
+          # 再同步远端，避免 push non-fast-forward
+          git pull --rebase origin main
+
+          # 推送回 main
+          git push origin HEAD:main
