@@ -85,13 +85,16 @@ DEFAULT_T_NU = 7.0
 def now_bjt() -> dt.datetime:
     return dt.datetime.utcnow() + dt.timedelta(hours=8)
 
+
 def now_bjt_iso() -> str:
     return now_bjt().replace(microsecond=0).isoformat()
+
 
 def ensure_dir_for_file(path: str) -> None:
     d = os.path.dirname(path)
     if d and not os.path.exists(d):
         os.makedirs(d, exist_ok=True)
+
 
 def read_json(path: str, default: Any = None) -> Any:
     if not os.path.exists(path):
@@ -99,18 +102,22 @@ def read_json(path: str, default: Any = None) -> Any:
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
+
 def save_json(path: str, obj: Any) -> None:
     ensure_dir_for_file(path)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(obj, f, ensure_ascii=False, indent=2)
+
 
 def append_jsonl(path: str, obj: Dict[str, Any]) -> None:
     ensure_dir_for_file(path)
     with open(path, "a", encoding="utf-8") as f:
         f.write(json.dumps(obj, ensure_ascii=False) + "\n")
 
+
 def sha1_of_text(s: str) -> str:
     return hashlib.sha1(s.encode("utf-8")).hexdigest()
+
 
 def safe_float(x: Any, default: Optional[float] = None) -> Optional[float]:
     try:
@@ -119,6 +126,7 @@ def safe_float(x: Any, default: Optional[float] = None) -> Optional[float]:
         return float(x)
     except Exception:
         return default
+
 
 def pct(a: float, b: float) -> float:
     if b == 0:
@@ -135,6 +143,7 @@ def http_get_text(url: str) -> str:
     r = requests.get(url, timeout=HTTP_TIMEOUT)
     r.raise_for_status()
     return r.text
+
 
 def fetch_market_row_blocking(url: str) -> Tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
     diag = {
@@ -213,6 +222,7 @@ def append_market_history(market_row: Dict[str, Any]) -> None:
     }
     append_jsonl(MARKET_HIST_PATH, rec)
 
+
 def load_last_n_market_history(n: int = MAX_RET_DAYS + 2) -> List[Dict[str, Any]]:
     if not os.path.exists(MARKET_HIST_PATH):
         return []
@@ -277,6 +287,7 @@ def default_state() -> Dict[str, Any]:
         "enable_volume_factor": False,
         "enable_beta_anchor": False,
     }
+
 
 def load_state() -> Dict[str, Any]:
     st = read_json(STATE_PATH, default=None)
@@ -369,28 +380,29 @@ def update_sigmas_from_history(state: Dict[str, Any], market_hist: List[Dict[str
 def _normal_quantile(p: float) -> float:
     # 你原来的近似实现（保留）
     p = min(max(p, 1e-10), 1 - 1e-10)
-    a = [-3.969683028665376e+01,  2.209460984245205e+02, -2.759285104469687e+02,
-          1.383577518672690e+02, -3.066479806614716e+01,  2.506628277459239e+00]
-    b = [-5.447609879822406e+01,  1.615858368580409e+02, -1.556989798598866e+02,
-          6.680131188771972e+01, -1.328068155288572e+01]
+    a = [-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02,
+         1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00]
+    b = [-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02,
+         6.680131188771972e+01, -1.328068155288572e+01]
     c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00,
-         -2.549732539343734e+00,  4.374664141464968e+00,  2.938163982698783e+00]
-    d = [ 7.784695709041462e-03,  3.224671290700398e-01,  2.445134137142996e+00,
-          3.754408661907416e+00]
+         -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00]
+    d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00,
+         3.754408661907416e+00]
     plow = 0.02425
     phigh = 1 - plow
     if p < plow:
-        q = math.sqrt(-2*math.log(p))
-        return (((((c[0]*q + c[1])*q + c[2])*q + c[3])*q + c[4])*q + c[5]) / \
-               ((((d[0]*q + d[1])*q + d[2])*q + d[3])*q + 1)
+        q = math.sqrt(-2 * math.log(p))
+        return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / \
+            ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1)
     if p > phigh:
-        q = math.sqrt(-2*math.log(1-p))
-        return -(((((c[0]*q + c[1])*q + c[2])*q + c[3])*q + c[4])*q + c[5]) / \
-                 ((((d[0]*q + d[1])*q + d[2])*q + d[3])*q + 1)
+        q = math.sqrt(-2 * math.log(1 - p))
+        return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / \
+            ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1)
     q = p - 0.5
-    r = q*q
-    return (((((a[0]*r + a[1])*r + a[2])*r + a[3])*r + a[4])*r + a[5])*q / \
-           (((((b[0]*r + b[1])*r + b[2])*r + b[3])*r + b[4])*r + 1)
+    r = q * q
+    return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q / \
+        (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1)
+
 
 def t_quantile_unitvar(p: float, nu: float) -> float:
     """
@@ -426,6 +438,7 @@ def q_price_log_t(spot: float, mu: float, sigma_ann: float, t_year: float, p: fl
     """
     z = t_quantile_unitvar(p, nu)
     return float(spot * math.exp((mu - 0.5 * sigma_ann * sigma_ann) * t_year + sigma_ann * math.sqrt(t_year) * z))
+
 
 def make_predictions(state: Dict[str, Any], spot_close: float, target_trade_date: str) -> Dict[str, Any]:
     mu = float(0.0 if state.get("mu_base") is None else state.get("mu_base"))
@@ -496,12 +509,14 @@ def load_last_pred_from_jsonl(path: str) -> Optional[Dict[str, Any]]:
                 continue
     return last
 
+
 def calc_hit_band(actual: float, p25: float, p75: float) -> str:
     if actual < p25:
         return "LOW(<P25)"
     if actual > p75:
         return "HIGH(>P75)"
     return "MID(P25~P75)"
+
 
 def build_eval_row(market_row: Dict[str, Any], last_pred: Optional[Dict[str, Any]], run_id: str) -> Dict[str, Any]:
     target_trade_date = str(market_row["trade_date"])
@@ -592,6 +607,7 @@ def fmt2(x: Any) -> str:
     except Exception:
         return str(x)
 
+
 def load_last_n_jsonl(path: str, n: int) -> List[Dict[str, Any]]:
     if not os.path.exists(path):
         return []
@@ -606,6 +622,7 @@ def load_last_n_jsonl(path: str, n: int) -> List[Dict[str, Any]]:
             except Exception:
                 continue
     return buf[-n:]
+
 
 def build_report(
     market_row: Dict[str, Any],
@@ -679,7 +696,10 @@ def build_report(
     if param_updates:
         lines.append(f"- 本次更新条目：{len(param_updates)}")
         for u in param_updates[-5:]:
-            lines.append(f"  - {u.get('type')}：1M {u.get('old_sigma_1m')}→{u.get('new_sigma_1m')}；6M {u.get('old_sigma_6m')}→{u.get('new_sigma_6m')}")
+            lines.append(
+                f"  - {u.get('type')}：1M {u.get('old_sigma_1m')}→{u.get('new_sigma_1m')}；"
+                f"6M {u.get('old_sigma_6m')}→{u.get('new_sigma_6m')}"
+            )
     else:
         lines.append("- 本次无更新（历史不足或首次运行）。")
     lines.append("")
@@ -700,6 +720,7 @@ def build_report(
     lines.append("")
     return "\n".join(lines)
 
+
 def build_placeholder_report(run_log: Dict[str, Any]) -> str:
     lines: List[str] = []
     lines.append("# 京东物流 V1.0 预测报告（占位）")
@@ -719,6 +740,7 @@ def build_placeholder_report(run_log: Dict[str, Any]) -> str:
     lines.append("  - 仅输出占位报告与法定结构 latest_report.json，保证界面可用且可追溯")
     lines.append("")
     return "\n".join(lines)
+
 
 def write_placeholder_latest_report_json(run_log: Dict[str, Any]) -> None:
     obj = {
