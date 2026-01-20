@@ -10,7 +10,12 @@ on:
     paths-ignore:
       - ".github/workflows/**"
 
+permissions:
+  contents: write
 
+concurrency:
+  group: jdlog-v1-executor
+  cancel-in-progress: true
 
 
 permissions:
