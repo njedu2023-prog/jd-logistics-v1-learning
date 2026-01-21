@@ -2,7 +2,7 @@ name: JD Logistics V1.0 Executor
 
 on:
   schedule:
-    - cron: "*/10 * * * *"   # 每 10 分钟（UTC）
+    - cron: "0 */2 * * *"   # 每 2 小时整点运行（UTC）
   workflow_dispatch:
   push:
     branches: [ main ]
