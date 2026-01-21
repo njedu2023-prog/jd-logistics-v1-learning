@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>京东物流 V1.0 法定预测报告</title>
+  <style>
+    body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial; margin:24px; line-height:1.5;}
+    .wrap{max-width:980px;margin:0 auto;}
+    .card{border:1px solid #e5e7eb;border-radius:14px;padding:16px 18px;margin:14px 0;}
+    h1{margin:0 0 8px;}
+    h2{margin:18px 0 10px;}
+    .meta{color:#374151;font-size:14px;}
+    .pill{display:inline-block;padding:2px 10px;border-radius:999px;background:#f3f4f6;margin-right:8px;}
+    table{width:100%;border-collapse:collapse;margin:8px 0;}
+    th,td{border:1px solid #e5e7eb;padding:8px 10px;font-size:14px;}
+    th{background:#f9fafb;text-align:left;}
+    .ok{color:#065f46;font-weight:600;}
+    .bad{color:#991b1b;font-weight:600;}
+    .muted{color:#6b7280;}
+    .row{display:flex;gap:10px;flex-wrap:wrap;}
+    .btn{border:1px solid #e5e7eb;border-radius:10px;padding:8px 12px;background:#fff;cursor:pointer;}
+    .btn:hover{background:#f9fafb;}
+    pre{background:#0b1020;color:#e5e7eb;padding:12px;border-radius:12px;overflow:auto;}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="row" style="align-items:center;justify-content:space-between;">
+    <div>
+      <h1>京东物流 V1.0 法定预测报告 📘</h1>
+      <div class="meta">
+        <span class="pill" id="symbol">symbol: -</span>
+        <span class="pill" id="tradeDate">trade_date: -</span>
+        <span class="pill" id="generatedAt">generated_at_bjt: -</span>
+      </div>
+      <div class="meta" style="margin-top:6px;">
+        数据源：<a id="dataSource" href="#" target="_blank" rel="noreferrer">-</a>
+        <span class="muted" id="reason" style="margin-left:10px;"></span>
+      </div>
+    </div>
+    <div class="row">
+      <button class="btn" id="refreshBtn">刷新数据</button>
+      <a class="btn" id="rawJsonBtn" href="latest_report.json" target="_blank" rel="noreferrer">打开 latest_report.json</a>
+    </div>
+  </div>
+
+  <div class="card" id="statusCard">
+    <b>状态：</b><span id="statusText">加载中…</span>
+  </div>
+
+  <div class="card">
+    <h2>① 当日实际交易数据 📊</h2>
+    <div id="marketTable"></div>
+  </div>
+
+  <div class="card">
+    <h2>② 昨日预测回顾 ✅</h2>
+    <div id="evalTable"></div>
+  </div>
+
+  <div class="card">
+    <h2>③ 次日价格分布预测（T+1） 🔮</h2>
+    <div id="distT1"></div>
+  </div>
+
+  <div class="card">
+    <h2>④ 未来 1 个月价格分布预测 🗓️</h2>
+    <div id="dist1M"></div>
+  </div>
+
+  <div class="card">
+    <h2>⑤ 未来 6 个月价格分布预测 🧭</h2>
+    <div id="dist6M"></div>
+  </div>
+
+  <div class="card">
+    <h2>⑥ 模型状态与学习更新 ⚙️</h2>
+    <div id="stateTable"></div>
+  </div>
+
+  <div class="card">
+    <h2>⑦ 最近 5 个交易日预测命中回顾 🧾</h2>
+    <div id="last5Table"></div>
+  </div>
+
+  <div class="card">
+    <h2>调试信息（可选）</h2>
+    <div class="muted">如果页面显示异常，可把下面内容截图发我。</div>
+    <pre id="debugBox">-</pre>
+  </div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  function escapeHtml(s){
+    if (s === null || s === undefined) return "";
+    return String(s).replace(/[&<>"']/g, (m)=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[m]));
+  }
+
+  function kvTable(obj, rows){
+    let html = `<table><thead><tr><th>字段</th><th>数值</th></tr></thead><tbody>`;
+    for (const [k, key] of rows){
+      const v = (key === null) ? "" : (obj?.[key] ?? "");
+      html += `<tr><td>${escapeHtml(k)}</td><td>${escapeHtml(v)}</td></tr>`;
+    }
+    html += `</tbody></table>`;
+    return html;
+  }
+
+  function distTableFromArray(arr){
+    // 期望: [{p:0.05,v:...}, ...]
+    if (!Array.isArray(arr) || arr.length === 0) return `<div class="muted">无数据</div>`;
+    let html = `<table><thead><tr><th>分位</th><th>价格(HKD)</th></tr></thead><tbody>`;
+    for (const r of arr){
+      const p = r?.p;
+      const label = (p === 0.05) ? "P05" : (p === 0.25) ? "P25" : (p === 0.5) ? "P50" : (p === 0.75) ? "P75" : (p === 0.95) ? "P95" : `P${Math.round(p*100)}`;
+      html += `<tr><td>${label}</td><td>${escapeHtml(r?.v ?? "")}</td></tr>`;
+    }
+    html += `</tbody></table>`;
+    return html;
+  }
+
+  function last5Table(rows){
+    if (!Array.isArray(rows) || rows.length === 0) return `<div class="muted">暂无历史</div>`;
+    let html = `<table><thead><tr>
+      <th>预测日期</th><th>实际日期</th><th>预测P50</th><th>实际收盘</th><th>误差</th><th>命中区间</th><th>判断</th>
+    </tr></thead><tbody>`;
+    for (const r of rows){
+      html += `<tr>
+        <td>${escapeHtml(r?.y_pred_trade_date ?? "")}</td>
+        <td>${escapeHtml(r?.today_trade_date ?? "")}</td>
+        <td>${escapeHtml(r?.y_pred_p50 ?? "")}</td>
+        <td>${escapeHtml(r?.today_close ?? "")}</td>
+        <td>${escapeHtml(r?.error ?? "")}</td>
+        <td>${escapeHtml(r?.hit_band ?? "")}</td>
+        <td>${escapeHtml(r?.judgment ?? "")}</td>
+      </tr>`;
+    }
+    html += `</tbody></table>`;
+    return html;
+  }
+
+  async function loadLatest(){
+    $("statusText").textContent = "加载中…";
+    $("debugBox").textContent = "-";
+
+    // 关键：加时间戳，避免浏览器/Pages/CDN 缓存导致读到旧 JSON
+    const url = `latest_report.json?ts=${Date.now()}`;
+
+    try{
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+      const data = await res.json();
+
+      // 顶部 meta
+      $("symbol").textContent = `symbol: ${data.symbol ?? "-"}`;
+      $("tradeDate").textContent = `trade_date: ${data.trade_date ?? "-"}`;
+      $("generatedAt").textContent = `generated_at_bjt: ${data.generated_at_bjt ?? "-"}`;
+      $("reason").textContent = data.report_reason ? `备注：${data.report_reason}` : "";
+
+      const sourceUrl = data?.module_1_market?.source_url || data?.module_1_market?.source || data?.data_source_url || "-";
+      $("dataSource").textContent = sourceUrl;
+      $("dataSource").href = (sourceUrl && sourceUrl !== "-") ? sourceUrl : "#";
+
+      // 状态
+      const ok = String(data.status || "").toUpperCase() === "SUCCESS";
+      $("statusText").innerHTML = ok
+        ? `<span class="ok">SUCCESS</span>`
+        : `<span class="bad">${escapeHtml(data.status ?? "UNKNOWN")}</span>`;
+
+      // 模块：市场
+      const m = data.module_1_market || {};
+      $("marketTable").innerHTML = kvTable(m, [
+        ["代码", "symbol"],
+        ["交易日", "trade_date"],
+        ["开盘价", "open"],
+        ["最高价", "high"],
+        ["最低价", "low"],
+        ["收盘价", "close"],
+        ["成交量", "volume"],
+        ["成交额", "turnover"],
+        ["抓取时间(BJT)", "fetched_at_bjt"],
+        ["数据源", "source_url"],
+      ]);
+
+      // 模块：回顾
+      const e = data.module_2_yesterday_review || {};
+      $("evalTable").innerHTML = kvTable(e, [
+        ["昨日预测中位价(P50)", "y_pred_p50"],
+        ["今日实际收盘价", "today_close"],
+        ["误差(实际-预测)", "error"],
+        ["命中分位区间", "hit_band"],
+        ["判断结果", "judgment"],
+        ["回顾基于预测日期", "y_pred_trade_date"],
+      ]);
+
+      // 分布
+      $("distT1").innerHTML = distTableFromArray(data.module_3_t1_distribution);
+      $("dist1M").innerHTML = distTableFromArray(data.module_4_1m_distribution);
+      $("dist6M").innerHTML = distTableFromArray(data.module_5_6m_distribution);
+
+      // 状态表
+      const st = data.module_6_model_state || {};
+      $("stateTable").innerHTML = kvTable(st, [
+        ["系统版本", "model_version"],
+        ["标的", "symbol"],
+        ["状态更新时间(BJT)", "updated_at_bjt"],
+        ["EWMA年化波动率(估计)", "sigma_ewma_1m_ann"],
+        ["日漂移μ(估计)", "mu_daily"],
+        ["最近样本条数(用于估计)", "return_samples"],
+      ]);
+
+      // last5
+      $("last5Table").innerHTML = last5Table(data.module_7_last5_hit);
+
+      $("debugBox").textContent = JSON.stringify({
+        fetched_url: url,
+        status: data.status,
+        generated_at_bjt: data.generated_at_bjt,
+        trade_date: data.trade_date
+      }, null, 2);
+
+    }catch(err){
+      $("statusText").innerHTML = `<span class="bad">FAILED</span> ${escapeHtml(err?.message || err)}`;
+      $("debugBox").textContent = String(err?.stack || err);
+    }
+  }
+
+  $("refreshBtn").addEventListener("click", loadLatest);
+
+  // 页面打开自动加载
+  loadLatest();
+</script>
+</body>
+</html>
