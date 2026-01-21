@@ -2,33 +2,43 @@ name: JD Logistics V1.0 Executor
 
 on:
   schedule:
-    - cron: "*/10 * * * *"   # 每 10 分钟自动运行一次（UTC）
+    - cron: "*/10 * * * *"   # 每 10 分钟（UTC）
   workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [ main ]
+    # 关键：忽略本工作流会生成/更新的产物路径，避免自触发死循环
     paths-ignore:
       - ".github/workflows/**"
+      - "evaluation/**"
+      - "learning/**"
+      - "market/**"
+      - "predictions/**"
+      - "runs/**"
+      - "state/**"
+      - "report_latest.md"
 
 permissions:
   contents: write
 
-  concurrency:
+# ✅ 必须在顶层！确保同一分支同一时间只跑一个
+concurrency:
   group: jdlog-v1-executor-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
-
+  cancel-in-progress: true
 
 jobs:
   run:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
+    # ✅ 阻断 actions bot push 触发（避免自己推自己跑）
+    if: github.actor != 'github-actions[bot]'
+
     env:
       TZ: Asia/Shanghai
       PYTHONUNBUFFERED: "1"
       SYMBOL: 02618.HK
       RUN_TYPE: AUTO
       DATA_SOURCE_URL: https://raw.githubusercontent.com/njedu2023-prog/JD-data/main/jd-logistics-latest.json
-      # ✅ repo secret 必须叫 HK_MARKET_API_TOKEN
       HK_MARKET_API_TOKEN: ${{ secrets.HK_MARKET_API_TOKEN }}
 
     steps:
@@ -36,6 +46,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: true
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -48,7 +59,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # ✅ 安全自检：不泄露 secret 全文
       - name: Debug env (safe)
         shell: bash
         run: |
@@ -65,17 +75,22 @@ jobs:
             echo "HK_MARKET_API_TOKEN_TAIL=****${HK_MARKET_API_TOKEN: -4}"
           fi
 
+      # ✅ 可选但推荐：先确保本地就是最新 main（减少后面 push 的非快进）
+      - name: Sync with origin/main
+        shell: bash
+        run: |
+          git fetch origin main
+          git reset --hard origin/main
+
       - name: Run executor
         run: |
           python scripts/executor_v1.py
 
-      - name: Commit changes (if any)
+      - name: Commit & push changes (if any)
         shell: bash
         run: |
           set -e
-          git status --porcelain
 
-          # 没有变化就直接结束
           if [ -z "$(git status --porcelain)" ]; then
             echo "No changes to commit."
             exit 0
@@ -84,12 +99,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # 关键修复：先 add+commit，让工作区变干净，再 pull --rebase
           git add -A
-          git commit -m "JD Logistics V1.0: update logs/market/pred/eval/state" || true
+          git commit -m "JD Logistics V1.0: update logs/market/pred/eval/state [skip ci]" || true
 
-          # 再同步远端，避免 push non-fast-forward
-          git pull --rebase origin main
-
-          # 推送回 main
+          # concurrency 已保证串行；正常情况下这里不会再产生冲突
           git push origin HEAD:main
