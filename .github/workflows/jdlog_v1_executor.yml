@@ -13,10 +13,6 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: jdlog-v1-executor
-  cancel-in-progress: false
-
 
 jobs:
   run:
