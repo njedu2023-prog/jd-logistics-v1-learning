@@ -2,7 +2,7 @@
   "status": "SUCCESS",
   "symbol": "02618.HK",
   "trade_date": "2026-01-20",
-  "generated_at_bjt": "2026-01-21T15:40:01",
+  "generated_at_bjt": "2026-01-21T15:45:10",
   "report_reason": "当日真实数据拉取成功；EWMA更新sigma；t分布预测写入完成。",
   "module_1_market": {
     "trade_date": "2026-01-20",
@@ -14,7 +14,7 @@
     "amount_yi_hkd": 0.7033,
     "source": "github_raw_json",
     "source_url": "https://raw.githubusercontent.com/njedu2023-prog/JD-data/main/jd-logistics-latest.json",
-    "fetched_at_bjt": "2026-01-21T15:40:01",
+    "fetched_at_bjt": "2026-01-21T15:45:09",
     "raw_sha1": "75c715c1ba17d99209bc73f77d051e88e61a2015"
   },
   "module_2_yesterday_review": {
@@ -23,123 +23,104 @@
     "symbol": "02618.HK",
     "actual_close": 11.29,
     "pred_ref_date": "2026-01-20",
-    "pred_median_t1": 11.289895667700202,
-    "pred_p25_t1": 11.260761704644942,
-    "pred_p75_t1": 11.31910500645611,
-    "abs_error": 0.00010433229979689429,
-    "rel_error_pct": 0.0009241210270470745,
+    "pred_median_t1": 11.28990575526782,
+    "pred_p25_t1": 11.262214234276241,
+    "pred_p75_t1": 11.317665364143263,
+    "abs_error": 9.424473217833906e-05,
+    "rel_error_pct": 0.0008347698751547583,
     "hit_band": "MID(P25~P75)",
     "amount_yi_hkd": 0.7033,
     "volume_percentile_20d": null,
     "enable_volume_factor": false,
     "enable_beta_anchor": false,
-    "run_id": "5bac2dbe31b8481b",
+    "run_id": "8531a134a0e541f8",
     "model_version": "V1.0"
   },
   "module_3_t1_distribution": [
     {
       "p": 0.05,
-      "v": 11.216282251142703
+      "v": 11.2196399863162
     },
     {
       "p": 0.25,
-      "v": 11.262214234276241
+      "v": 11.263484862050834
     },
     {
       "p": 0.5,
-      "v": 11.28990575526782
+      "v": 11.289914160810852
     },
     {
       "p": 0.75,
-      "v": 11.317665364143263
+      "v": 11.316405474821169
     },
     {
       "p": 0.95,
-      "v": 11.364012522941259
+      "v": 11.360628497343408
     }
   ],
   "module_4_1m_distribution": [
     {
       "p": 0.05,
-      "v": 10.954610448338386
+      "v": 10.969780693432032
     },
     {
       "p": 0.25,
-      "v": 11.161699993096843
+      "v": 11.167608441559358
     },
     {
       "p": 0.5,
-      "v": 11.288021025826735
+      "v": 11.288197514076845
     },
     {
       "p": 0.75,
-      "v": 11.415771679789938
+      "v": 11.410088720751947
     },
     {
       "p": 0.95,
-      "v": 11.631579167548916
+      "v": 11.615856932591482
     }
   ],
   "module_5_6m_distribution": [
     {
       "p": 0.05,
-      "v": 10.23417050870588
+      "v": 10.329129315235486
     },
     {
       "p": 0.25,
-      "v": 10.869182961585068
+      "v": 10.90910675240124
     },
     {
       "p": 0.5,
-      "v": 11.269568871909232
+      "v": 11.273171739094263
     },
     {
       "p": 0.75,
-      "v": 11.684703717618211
+      "v": 11.649386511974557
     },
     {
       "p": 0.95,
-      "v": 12.409719229386303
+      "v": 12.303495985054983
     }
   ],
   "module_6_model_state": {
     "model_version": "V1.0",
     "created_at_bjt": "2026-01-01T00:00:00",
-    "updated_at_bjt": "2026-01-21T15:40:01",
-    "sigma_base": 0.06486310669779004,
+    "updated_at_bjt": "2026-01-21T15:45:10",
+    "sigma_base": 0.06190303268771952,
     "mu_base": 0.0,
-    "sigma_1m": 0.06486310669779004,
-    "sigma_6m": 0.08511886584262957,
+    "sigma_1m": 0.06190303268771952,
+    "sigma_6m": 0.07724396841557343,
     "t_nu": 7.0,
     "last_close": 11.29,
     "last_trade_date": "2026-01-20",
-    "sigma_short": 0.06486310669779004,
-    "sigma_mid": 0.06486310669779004,
-    "sigma_long": 0.08511886584262957,
+    "sigma_short": 0.06190303268771952,
+    "sigma_mid": 0.06190303268771952,
+    "sigma_long": 0.07724396841557343,
     "enable_volume_factor": false,
     "enable_beta_anchor": false,
     "symbol": "02618.HK"
   },
   "module_7_last5_hit": [
-    {
-      "eval_date": "2026-01-20",
-      "target_trade_date": "2026-01-20",
-      "symbol": "02618.HK",
-      "actual_close": 11.29,
-      "pred_ref_date": "2026-01-20",
-      "pred_median_t1": 11.289755123759127,
-      "pred_p25_t1": 11.245152428811764,
-      "pred_p75_t1": 11.334534730527755,
-      "abs_error": 0.00024487624087221604,
-      "rel_error_pct": 0.002169012863324888,
-      "hit_band": "MID(P25~P75)",
-      "amount_yi_hkd": 0.7033,
-      "volume_percentile_20d": null,
-      "enable_volume_factor": false,
-      "enable_beta_anchor": false,
-      "run_id": "050b0c3ebaec47a3",
-      "model_version": "V1.0"
-    },
     {
       "eval_date": "2026-01-20",
       "target_trade_date": "2026-01-20",
@@ -214,6 +195,25 @@
       "enable_volume_factor": false,
       "enable_beta_anchor": false,
       "run_id": "5bac2dbe31b8481b",
+      "model_version": "V1.0"
+    },
+    {
+      "eval_date": "2026-01-20",
+      "target_trade_date": "2026-01-20",
+      "symbol": "02618.HK",
+      "actual_close": 11.29,
+      "pred_ref_date": "2026-01-20",
+      "pred_median_t1": 11.28990575526782,
+      "pred_p25_t1": 11.262214234276241,
+      "pred_p75_t1": 11.317665364143263,
+      "abs_error": 9.424473217833906e-05,
+      "rel_error_pct": 0.0008347698751547583,
+      "hit_band": "MID(P25~P75)",
+      "amount_yi_hkd": 0.7033,
+      "volume_percentile_20d": null,
+      "enable_volume_factor": false,
+      "enable_beta_anchor": false,
+      "run_id": "8531a134a0e541f8",
       "model_version": "V1.0"
     }
   ]
