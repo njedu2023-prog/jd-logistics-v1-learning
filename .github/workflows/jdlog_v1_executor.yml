@@ -2,7 +2,8 @@ name: JD Logistics V1.0 Executor
 
 on:
   schedule:
-    - cron: "0 */2 * * *"   # 每 2 小时整点运行（UTC）
+    # 北京时间 周一~周五 18:35（UTC 10:35）
+    - cron: "35 10 * * 1-5"
   workflow_dispatch:
   push:
     branches: [ main ]
@@ -37,7 +38,7 @@ jobs:
       TZ: Asia/Shanghai
       PYTHONUNBUFFERED: "1"
       SYMBOL: 02618.HK
-      RUN_TYPE: AUTO
+      RUN_TYPE: AUTO_1835
       DATA_SOURCE_URL: https://raw.githubusercontent.com/njedu2023-prog/JD-data/main/jd-logistics-latest.json
       HK_MARKET_API_TOKEN: ${{ secrets.HK_MARKET_API_TOKEN }}
 
