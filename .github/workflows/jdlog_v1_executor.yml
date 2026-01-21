@@ -13,6 +13,10 @@ on:
 permissions:
   contents: write
 
+  concurrency:
+  group: jdlog-v1-executor-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
 
 jobs:
   run:
