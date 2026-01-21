@@ -1,0 +1,115 @@
+{
+  "status": "SUCCESS",
+  "symbol": "02618.HK",
+  "trade_date": "2026-01-21",
+  "generated_at_bjt": "2026-01-22T06:35:31+0800",
+  "report_reason": "市场数据已是最新交易日（不重复追加market_history）",
+  "module_1_market": {
+    "symbol": "02618.HK",
+    "trade_date": "2026-01-21",
+    "open": 11.21,
+    "high": 11.42,
+    "low": 11.2,
+    "close": 11.37,
+    "volume": 7540723.0,
+    "turnover": 85444376.26,
+    "source_url": "https://raw.githubusercontent.com/njedu2023-prog/JD-data/main/jd-logistics-latest.json",
+    "fetched_at_bjt": "2026-01-22T06:35:31+0800",
+    "raw": {
+      "symbol": "02618.HK",
+      "date": "2026-01-21",
+      "open": 11.21,
+      "high": 11.42,
+      "low": 11.2,
+      "close": 11.37,
+      "volume": 7540723,
+      "amount": 85444376.26
+    }
+  },
+  "module_2_yesterday_review": {
+    "symbol": "02618.HK",
+    "y_pred_trade_date": "",
+    "today_trade_date": "2026-01-21",
+    "y_pred_p50": "",
+    "today_close": 11.37,
+    "error": "",
+    "hit_band": "",
+    "judgment": "历史预测不足：本次不生成昨日回顾（避免伪造历史）",
+    "generated_at_bjt": "2026-01-22T06:35:31+0800"
+  },
+  "module_3_t1_distribution": [
+    {
+      "p": 0.05,
+      "v": 11.309
+    },
+    {
+      "p": 0.25,
+      "v": 11.342
+    },
+    {
+      "p": 0.5,
+      "v": 11.365
+    },
+    {
+      "p": 0.75,
+      "v": 11.388
+    },
+    {
+      "p": 0.95,
+      "v": 11.422
+    }
+  ],
+  "module_4_1m_distribution": [
+    {
+      "p": 0.05,
+      "v": 11.012
+    },
+    {
+      "p": 0.25,
+      "v": 11.16
+    },
+    {
+      "p": 0.5,
+      "v": 11.265
+    },
+    {
+      "p": 0.75,
+      "v": 11.371
+    },
+    {
+      "p": 0.95,
+      "v": 11.524
+    }
+  ],
+  "module_5_6m_distribution": [
+    {
+      "p": 0.05,
+      "v": 10.172
+    },
+    {
+      "p": 0.25,
+      "v": 10.512
+    },
+    {
+      "p": 0.5,
+      "v": 10.755
+    },
+    {
+      "p": 0.75,
+      "v": 11.003
+    },
+    {
+      "p": 0.95,
+      "v": 11.371
+    }
+  ],
+  "module_6_model_state": {
+    "model_version": "V1.0",
+    "symbol": "02618.HK",
+    "updated_at_bjt": "2026-01-22T06:35:31+0800",
+    "sigma_ewma_1m_ann": 0.0479,
+    "mu_daily": -0.000437,
+    "return_samples": 28
+  },
+  "module_7_last5_hit": []
+}
