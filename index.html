@@ -15,9 +15,10 @@
     .meta{font-size:13px;color:#555;line-height:1.6}
     .row{display:flex;gap:12px;flex-wrap:wrap}
     .badge{background:#f1f3f5;border:1px solid #e6e8eb;border-radius:10px;padding:6px 10px;font-size:13px;color:#333}
-    pre{white-space:pre-wrap;word-break:break-word;margin:12px 0 0 0;font-size:13px;line-height:1.55}
-    .err{color:#b42318}
     .btn{cursor:pointer;border:1px solid #e6e8eb;background:#fff;border-radius:10px;padding:8px 12px;font-size:13px}
+    .err{color:#b42318}
+    .hint{font-size:12px;color:#666;margin-top:8px}
+    pre{white-space:pre-wrap;word-break:break-word;margin:12px 0 0 0;font-size:13px;line-height:1.55}
     .topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
   </style>
 </head>
@@ -28,9 +29,13 @@
         <h1>京东物流 V1.0 法定预测报告</h1>
         <div class="row">
           <button class="btn" onclick="loadReport()">刷新数据</button>
+          <span class="badge" id="status">状态：加载中…</span>
         </div>
       </div>
+
       <div id="meta" class="meta">正在加载 latest_report.json ...</div>
+      <div class="hint">说明：本页每次打开都会自动拉取最新 latest_report.json（已禁用缓存），保证“打开即最新”。</div>
+
       <pre id="out"></pre>
     </div>
   </div>
@@ -39,36 +44,48 @@
 async function loadReport(){
   const meta = document.getElementById('meta');
   const out  = document.getElementById('out');
+  const status = document.getElementById('status');
 
   try{
-    // 加时间戳避免浏览器缓存
+    status.textContent = '状态：抓取中…';
+
+    // ✅ 打开即最新关键：禁用缓存 + URL 加时间戳
     const url = 'latest_report.json?t=' + Date.now();
     const r = await fetch(url, { cache: 'no-store' });
     if(!r.ok) throw new Error('HTTP ' + r.status + ' ' + r.statusText);
 
     const data = await r.json();
 
-    // 这里先做“原样展示”，确保数据永远最新且可用
-    // 你要“页面排版=你那份法定报告100%一致”，下一步我再按你的模板把 data 映射成固定板块渲染。
-    const now = new Date().toISOString();
+    // 兼容字段（不改你JSON结构也能显示）
     const symbol = data.symbol || data.code || data.ticker || '02618.HK';
-    const date = data.date || data.trade_date || data.trading_date || '未知';
+    const date   = data.date || data.trade_date || data.trading_date || '未知';
+    const genTs  = data.generated_at || data.generatedAt || data.report_time || '';
 
     meta.innerHTML = `
       <div class="row">
         <div class="badge">代码：${symbol}</div>
         <div class="badge">时间：${date}</div>
-        <div class="badge">页面刷新：${now}</div>
+        <div class="badge">页面刷新：${new Date().toISOString()}</div>
       </div>
-      <div style="margin-top:8px">数据源：/latest_report.json（打开即最新；已禁用缓存）</div>
+      <div style="margin-top:8px">
+        数据源：/latest_report.json（no-store + 时间戳防缓存）
+        ${genTs ? `｜报告生成时间：${genTs}` : ``}
+      </div>
     `;
 
+    // 先原样展示，确保“永远最新”链路 100% 稳
     out.textContent = JSON.stringify(data, null, 2);
+
+    status.textContent = '状态：已更新 ✅';
   }catch(e){
-    meta.innerHTML = `<div class="err">加载失败：${e.message}</div><div class="meta">请确认根目录存在 latest_report.json，且 GitHub Pages 已发布。</div>`;
+    status.textContent = '状态：失败 ❌';
+    meta.innerHTML = `<div class="err">加载失败：${e.message}</div>
+      <div class="meta">请确认仓库根目录存在 latest_report.json，并且 GitHub Pages 已发布到 root。</div>`;
     out.textContent = '';
   }
 }
+
+// ✅ 打开页面自动执行一次 = “打开即最新”
 loadReport();
 </script>
 </body>
