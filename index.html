@@ -248,7 +248,7 @@ const FIELD_ZH = {
   p: '分位点（P）',
   v: '价格（HKD）',
 
-  // 模块②
+  // 模块②（保留兼容）
   pred_date: '预测日期',
   pred_close: '预测收盘价',
   reason: '说明',
@@ -318,7 +318,6 @@ const FIELD_ZH = {
 
 function label(k){ return FIELD_ZH[k] || k; }
 
-/** ✅ 标准 HTML 转义（避免二次转义问题） */
 function escapeHtml(s){
   return String(s)
     .replaceAll('&','&amp;')
@@ -500,6 +499,70 @@ function buildFallbackReport(market){
   };
 }
 
+/** ✅ 模块②：按“截图2”的 6 行结构渲染 */
+function renderYesterdayReviewLikeShot2(obj){
+  if(!obj || (typeof obj === 'object' && !Array.isArray(obj) && Object.keys(obj).length === 0)){
+    return '<div class="small">暂无数据</div>';
+  }
+
+  const toNum = (x) => (typeof x === 'number' ? x : (x == null ? null : Number(x)));
+  const fmt3trim = (x) => (typeof x === 'number' && Number.isFinite(x))
+    ? x.toFixed(3).replace(/0+$/,'').replace(/\.$/,'')
+    : (x == null ? '' : String(x));
+
+  // 兼容多种字段命名（以你的 JSON 为准自动匹配）
+  const p50 = toNum(
+    obj?.pred_median_p50 ??
+    obj?.pred_p50 ??
+    obj?.pred_median ??
+    obj?.pred_close ??
+    obj?.yesterday_pred_p50 ??
+    obj?.p50
+  );
+
+  const actual = toNum(
+    obj?.today_actual_close ??
+    obj?.actual_close ??
+    obj?.close
+  );
+
+  // 误差：优先 obj.error / obj.err / obj.abs_error，否则用 实际-预测
+  let err = toNum(obj?.error ?? obj?.err ?? obj?.abs_error);
+  if(err == null && p50 != null && actual != null) err = actual - p50;
+
+  const hit = obj?.hit_bucket ?? obj?.hit_band ?? obj?.hit_range ?? obj?.hit_quantile ?? '';
+  const judge = obj?.judge ?? obj?.result ?? obj?.judgement ?? obj?.decision ?? '';
+
+  const basePredDate =
+    obj?.pred_ref_date ??
+    obj?.pred_date ??
+    obj?.review_base_pred_date ??
+    obj?.base_pred_date ??
+    obj?.eval_date ??
+    '';
+
+  const rows = [
+    ['昨日预测中位价(P50)', fmt3trim(p50)],
+    ['今日实际收盘价', fmt3trim(actual)],
+    ['误差(实际-预测)', fmt3trim(err)],
+    ['命中分位区间', hit],
+    ['判断结果', judge],
+    ['回顾基于预测日期', basePredDate],
+  ].map(([k,v]) => `
+    <tr>
+      <td class="k">${escapeHtml(k)}</td>
+      <td>${escapeHtml(v == null ? '' : String(v))}</td>
+    </tr>
+  `).join('');
+
+  return `
+    <table>
+      <thead><tr><th>字段</th><th>数值</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
 /** ✅ 模块⑦：按“截图2”的列结构渲染（更简洁的 7 列） */
 function renderHitReviewLikeShot2(arr){
   if(!Array.isArray(arr) || arr.length === 0){
@@ -507,9 +570,7 @@ function renderHitReviewLikeShot2(arr){
   }
 
   const toNum = (x) => (typeof x === 'number' ? x : (x == null ? null : Number(x)));
-  const fmt = (x) => (typeof x === 'number' && Number.isFinite(x))
-    ? x.toFixed(3).replace(/0+$/,'').replace(/\.$/,'')
-    : (x == null ? '' : String(x));
+  const fmt2 = (x) => (typeof x === 'number' && Number.isFinite(x)) ? x.toFixed(3).replace(/0+$/,'').replace(/\.$/,'') : (x == null ? '' : String(x));
 
   const rows = arr.map(r=>{
     const predDate   = r?.pred_ref_date ?? r?.eval_date ?? '';
@@ -527,9 +588,9 @@ function renderHitReviewLikeShot2(arr){
     return `<tr>
       <td>${escapeHtml(predDate)}</td>
       <td>${escapeHtml(actualDate)}</td>
-      <td>${escapeHtml(fmt(p50))}</td>
-      <td>${escapeHtml(fmt(actual))}</td>
-      <td>${escapeHtml(fmt(err))}</td>
+      <td>${escapeHtml(fmt2(p50))}</td>
+      <td>${escapeHtml(fmt2(actual))}</td>
+      <td>${escapeHtml(fmt2(err))}</td>
       <td>${escapeHtml(hitBand)}</td>
       <td>${escapeHtml(judge)}</td>
     </tr>`;
@@ -568,8 +629,8 @@ function renderReport(d){
   $('m4c').innerHTML = arrayTable(d.module_4_1m_distribution);
   $('m5c').innerHTML = arrayTable(d.module_5_6m_distribution);
 
-  // ②
-  $('m2c').innerHTML = kvTable(d.module_2_yesterday_review, '暂无数据');
+  // ✅ ②：按截图2的 6 行结构渲染
+  $('m2c').innerHTML = renderYesterdayReviewLikeShot2(d.module_2_yesterday_review);
 
   // ⑥：全量显示（不筛字段），关键字段排前
   $('m6c').innerHTML = kvTable(d.module_6_model_state, '暂无数据', {
@@ -600,7 +661,7 @@ function renderReport(d){
     ]
   });
 
-  // ✅ ⑦：按截图2的结构渲染
+  // ✅ ⑦：按截图2的结构渲染（替换掉原先“截图1”的大表）
   $('m7c').innerHTML = renderHitReviewLikeShot2(d.module_7_last5_hit);
 }
 
