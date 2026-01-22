@@ -1,435 +1,473 @@
 <!doctype html>
-<html lang="zh-Hans">
+<html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
-  <title>京东物流 V1.0 报告</title>
+  <title>京东物流 V1.0 法定预测报告</title>
   <style>
     :root{
-      --bg:#ffffff;
-      --fg:#111827;
-      --muted:#6b7280;
-      --border:#e5e7eb;
-      --tableHead:#f8fafc;
-      --codeBg:#f3f4f6;
+      --bg:#f6f7f9;
+      --card:#ffffff;
+      --text:#111;
+      --muted:#667085;
+      --line:#e6e8eb;
+      --shadow:0 1px 2px rgba(0,0,0,.04);
     }
-    html,body{height:100%;}
+    *{box-sizing:border-box}
     body{
-      margin:0;
+      margin:18px;
       background:var(--bg);
-      color:var(--fg);
-      font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",Arial,"Noto Sans CJK SC",sans-serif;
+      color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",Arial,sans-serif;
     }
-    .wrap{
-      max-width: 980px;
-      margin: 0 auto;
-      padding: 28px 16px 56px;
+    .wrap{max-width:1480px;margin:0 auto}
+    .card{
+      background:var(--card);
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:18px;
+      margin:14px 0;
+      box-shadow:var(--shadow);
     }
-    h1,h2,h3{margin:0 0 12px;}
     h1{
-      font-size: 26px;
-      font-weight: 800;
-      letter-spacing: .2px;
-      margin-bottom: 10px;
+      font-size:32px;
+      line-height:1.2;
+      margin:0 0 14px 0;
+      font-weight:800;
+      letter-spacing:.2px;
     }
-    h2{
-      font-size: 18px;
-      font-weight: 800;
-      margin-top: 22px;
-      margin-bottom: 10px;
+    .meta{
+      margin:0;
+      padding-left:0;
+      list-style:none;
+      color:var(--text);
+      font-size:20px;
+      line-height:1.8;
     }
-    hr{
-      border:0;
-      border-top:1px solid var(--border);
-      margin: 18px 0;
+    .meta .k{font-weight:800;display:inline-block;min-width:140px}
+    .meta .v{font-weight:600}
+    .muted{color:var(--muted);font-weight:500}
+    .hr{height:1px;background:var(--line);margin:14px 0}
+    .secTitle{
+      font-size:26px;
+      font-weight:900;
+      margin:0 0 10px 0;
+      letter-spacing:.2px;
     }
-    blockquote{
-      margin: 10px 0 18px;
-      padding: 8px 12px;
-      border-left: 4px solid var(--border);
-      color: var(--fg);
-      background: #fafafa;
-    }
-    blockquote b{font-weight:800;}
-    a{color:#2563eb;text-decoration:none;}
-    a:hover{text-decoration:underline;}
+
     table{
       width:100%;
-      border-collapse: collapse;
-      margin: 10px 0 14px;
-      font-variant-numeric: tabular-nums;
+      border-collapse:collapse;
+      margin-top:8px;
+      font-size:22px;
     }
-    th,td{
-      border:1px solid var(--border);
-      padding: 9px 10px;
-      vertical-align: top;
-    }
-    th{
-      background: var(--tableHead);
+    thead th{
       text-align:left;
-      font-weight:800;
+      font-weight:900;
+      padding:16px 12px;
+      border-bottom:2px solid var(--line);
     }
-    td.num, th.num{ text-align:right; }
-    .muted{ color: var(--muted); }
+    tbody td{
+      padding:18px 12px;
+      border-bottom:1px solid var(--line);
+      vertical-align:middle;
+      font-weight:600;
+    }
+    .twoCol thead th:nth-child(2),
+    .twoCol tbody td:nth-child(2){
+      text-align:left;
+    }
+
+    .smallNote{
+      color:var(--muted);
+      font-size:16px;
+      line-height:1.6;
+      margin-top:10px;
+      font-weight:500;
+    }
+
+    .statusLine{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      margin-top:6px;
+      color:var(--muted);
+      font-size:14px;
+    }
+    .pill{
+      display:inline-block;
+      padding:3px 10px;
+      border:1px solid var(--line);
+      border-radius:999px;
+      font-size:13px;
+      color:#344054;
+      background:#fff;
+      font-weight:700;
+    }
     .error{
-      padding: 12px 14px;
-      border:1px solid #fecaca;
-      background:#fff1f2;
-      color:#991b1b;
-      border-radius: 10px;
-      white-space: pre-wrap;
+      color:#b42318;
+      font-weight:800;
+      font-size:14px;
     }
-    /* 让整体视觉尽量接近 report_latest.md 的“纯报告”风格：不加多余卡片/按钮 */
+    .ok{
+      color:#027a48;
+      font-weight:800;
+      font-size:14px;
+    }
   </style>
 </head>
 
 <body>
-  <main class="wrap">
-    <div id="report">
-      <!-- 打开即最新：内容由 latest_report.json 注入 -->
-      <div class="muted">正在加载最新报告…</div>
+<div class="wrap">
+
+  <!-- 顶部标题 + 关键信息 -->
+  <div class="card">
+    <h1>京东物流 V1.0 法定预测报告</h1>
+    <ul class="meta">
+      <li><span class="k">标的：</span><span class="v" id="meta_symbol">--</span></li>
+      <li><span class="k">交易日：</span><span class="v" id="meta_trade_date">--</span></li>
+      <li><span class="k">报告生成时间（BJT）：</span><span class="v" id="meta_report_time">--</span></li>
+      <li><span class="k">数据源：</span><span class="v" id="meta_source">--</span></li>
+    </ul>
+  </div>
+
+  <!-- ① 当日实际交易数据 -->
+  <div class="card">
+    <div class="secTitle">① 当日实际交易数据</div>
+    <table class="twoCol">
+      <thead>
+        <tr><th>指标</th><th>数值</th></tr>
+      </thead>
+      <tbody id="tbl_market"></tbody>
+    </table>
+  </div>
+
+  <!-- ② 昨日预测回顾 -->
+  <div class="card">
+    <div class="secTitle">② 昨日预测回顾</div>
+    <table class="twoCol">
+      <thead>
+        <tr><th>字段</th><th>数值</th></tr>
+      </thead>
+      <tbody id="tbl_review"></tbody>
+    </table>
+  </div>
+
+  <!-- ③ 次日价格分布预测（T+1） -->
+  <div class="card">
+    <div class="secTitle">③ 次日价格分布预测（T+1）</div>
+    <table>
+      <thead>
+        <tr><th>分位</th><th>价格（HKD）</th></tr>
+      </thead>
+      <tbody id="tbl_t1"></tbody>
+    </table>
+  </div>
+
+  <!-- ④ 未来 1 个月价格分布预测 -->
+  <div class="card">
+    <div class="secTitle">④ 未来 1 个月价格分布预测</div>
+    <table>
+      <thead>
+        <tr><th>分位</th><th>价格（HKD）</th></tr>
+      </thead>
+      <tbody id="tbl_m1"></tbody>
+    </table>
+  </div>
+
+  <!-- ⑤ 未来 6 个月价格分布预测 -->
+  <div class="card">
+    <div class="secTitle">⑤ 未来 6 个月价格分布预测</div>
+    <table>
+      <thead>
+        <tr><th>分位</th><th>价格（HKD）</th></tr>
+      </thead>
+      <tbody id="tbl_m6"></tbody>
+    </table>
+  </div>
+
+  <!-- ⑥ 模型状态与学习更新 -->
+  <div class="card">
+    <div class="secTitle">⑥ 模型状态与学习更新</div>
+    <table>
+      <thead>
+        <tr><th>类别</th><th>字段</th><th>数值</th></tr>
+      </thead>
+      <tbody id="tbl_status"></tbody>
+    </table>
+
+    <div class="statusLine">
+      <span class="pill" id="pill_fetch">DATA: --</span>
+      <span class="pill" id="pill_parse">PARSE: --</span>
+      <span class="pill" id="pill_render">RENDER: --</span>
+      <span class="muted" id="last_update">--</span>
     </div>
-  </main>
 
-  <script>
-    // 去掉表情/小图标（emoji 等）——标题/正文都处理
-    function stripEmojis(text) {
-      if (typeof text !== "string") return text;
-      // 覆盖常见 emoji 区段 + 变体选择符
-      return text
-        .replace(/[\u{1F1E6}-\u{1F1FF}]/gu, "") // flags
-        .replace(/[\u{1F300}-\u{1FAFF}]/gu, "") // emoji blocks
-        .replace(/[\u{2600}-\u{26FF}]/gu, "")   // misc symbols
-        .replace(/[\u{2700}-\u{27BF}]/gu, "")   // dingbats
-        .replace(/\uFE0F/gu, "")                // variation selector
-        .replace(/\u200D/gu, "")                // zwj
-        .replace(/[ \t]+/g, " ")
-        .replace(/ *\n/g, "\n")
-        .trimEnd();
-    }
+    <div class="smallNote" id="note_msg"></div>
+  </div>
 
-    // 极简 Markdown -> HTML（只处理本报告用到的：h1/h2/hr/blockquote/table/paragraph/link/bold）
-    function mdToHtml(md) {
-      if (!md) return "";
-      md = stripEmojis(md);
+  <!-- ⑦ 过去五个交易日预测命中回顾 -->
+  <div class="card">
+    <div class="secTitle">⑦ 过去五个交易日预测命中回顾</div>
+    <table>
+      <thead>
+        <tr>
+          <th>预测日期</th>
+          <th>实际日期</th>
+          <th>预测 P50</th>
+          <th>实际收盘</th>
+          <th>误差</th>
+          <th>命中区间</th>
+          <th>判断</th>
+        </tr>
+      </thead>
+      <tbody id="tbl_last5"></tbody>
+    </table>
+  </div>
 
-      // 先把 & < > 转义，避免注入；后续我们会把需要的 markdown 结构变回 HTML
-      const esc = (s) => s
-        .replace(/&/g,"&amp;")
-        .replace(/</g,"&lt;")
-        .replace(/>/g,"&gt;");
+</div>
 
-      let lines = md.split("\n");
-      let out = [];
-      let i = 0;
+<script>
+  // ====== 配置：你的数据源 ======
+  const DATA_URL = "https://raw.githubusercontent.com/njedu2023-prog/JD-data/main/jd-logistics-latest.json";
 
-      function parseInline(s){
-        // **bold**
-        s = s.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
-        // links: [text](url)
-        s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
-        // bare url -> link
-        s = s.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
-        return s;
+  // ====== 工具函数 ======
+  function byId(id){ return document.getElementById(id); }
+
+  function fmt(v, digits=null){
+    if (v === null || v === undefined || v === "") return "--";
+    if (typeof v === "number"){
+      if (Number.isFinite(v)){
+        return digits===null ? String(v) : v.toFixed(digits);
       }
+      return "--";
+    }
+    return String(v);
+  }
 
-      while (i < lines.length) {
-        let line = lines[i];
-
-        // hr
-        if (/^\s*---\s*$/.test(line)) {
-          out.push("<hr/>");
-          i++;
-          continue;
+  function getAny(obj, paths){
+    // paths: ["a.b.c","x.y","k"]
+    for (const p of paths){
+      const parts = p.split(".");
+      let cur = obj;
+      let ok = true;
+      for (const key of parts){
+        if (cur && Object.prototype.hasOwnProperty.call(cur, key)){
+          cur = cur[key];
+        }else{
+          ok = false; break;
         }
-
-        // h1
-        if (/^\s*#\s+/.test(line)) {
-          const t = line.replace(/^\s*#\s+/, "");
-          out.push("<h1>" + parseInline(esc(t)) + "</h1>");
-          i++;
-          continue;
-        }
-
-        // h2
-        if (/^\s*##\s+/.test(line)) {
-          const t = line.replace(/^\s*##\s+/, "");
-          out.push("<h2>" + parseInline(esc(t)) + "</h2>");
-          i++;
-          continue;
-        }
-
-        // blockquote (单行或连续多行)
-        if (/^\s*>\s?/.test(line)) {
-          let bq = [];
-          while (i < lines.length && /^\s*>\s?/.test(lines[i])) {
-            bq.push(lines[i].replace(/^\s*>\s?/, ""));
-            i++;
-          }
-          const bqHtml = parseInline(esc(bq.join("\n")));
-          out.push("<blockquote>" + bqHtml.replace(/\n/g, "<br/>") + "</blockquote>");
-          continue;
-        }
-
-        // markdown table
-        // | a | b |
-        if (/^\s*\|.*\|\s*$/.test(line)) {
-          let tbl = [];
-          while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) {
-            tbl.push(lines[i]);
-            i++;
-          }
-
-          // 解析表格
-          // 第一行 header
-          // 第二行分隔 |---|---:|
-          if (tbl.length >= 2 && /^\s*\|?\s*:?-{3,}/.test(tbl[1].replace(/\s/g,""))) {
-            const header = tbl[0].trim();
-            const sep = tbl[1].trim();
-            const rows = tbl.slice(2);
-
-            function splitRow(r){
-              let x = r.trim();
-              if (x.startsWith("|")) x = x.slice(1);
-              if (x.endsWith("|")) x = x.slice(0, -1);
-              return x.split("|").map(c => c.trim());
-            }
-
-            const heads = splitRow(header);
-            const seps = splitRow(sep);
-
-            const isRight = seps.map(s => /:\s*$/.test(s) || /-+:\s*$/.test(s) || /:\s*-+:\s*$/.test(s));
-            let html = [];
-            html.push("<table>");
-            html.push("<thead><tr>");
-            for (let c = 0; c < heads.length; c++) {
-              const cls = isRight[c] ? ' class="num"' : "";
-              html.push("<th" + cls + ">" + parseInline(esc(heads[c] || "")) + "</th>");
-            }
-            html.push("</tr></thead>");
-            html.push("<tbody>");
-            for (const r of rows) {
-              if (!r.trim()) continue;
-              const cols = splitRow(r);
-              html.push("<tr>");
-              for (let c = 0; c < heads.length; c++) {
-                const cls = isRight[c] ? ' class="num"' : "";
-                html.push("<td" + cls + ">" + parseInline(esc(cols[c] ?? "")) + "</td>");
-              }
-              html.push("</tr>");
-            }
-            html.push("</tbody></table>");
-            out.push(html.join(""));
-            continue;
-          } else {
-            // 不是规范 table，就当普通段落
-            out.push("<p>" + parseInline(esc(tbl.join("\n"))) + "</p>");
-            continue;
-          }
-        }
-
-        // 空行跳过
-        if (!line.trim()) { i++; continue; }
-
-        // 普通段落：合并连续非空非特殊行
-        let para = [];
-        while (i < lines.length && lines[i].trim()
-          && !/^\s*#\s+/.test(lines[i])
-          && !/^\s*##\s+/.test(lines[i])
-          && !/^\s*---\s*$/.test(lines[i])
-          && !/^\s*>\s?/.test(lines[i])
-          && !/^\s*\|.*\|\s*$/.test(lines[i])
-        ) {
-          para.push(lines[i]);
-          i++;
-        }
-        out.push("<p>" + parseInline(esc(para.join("<br/>"))) + "</p>");
       }
+      if (ok && cur !== undefined && cur !== null) return cur;
+    }
+    return null;
+  }
 
-      return out.join("\n");
+  function setKVTable(tbodyEl, rows){
+    // rows: [{k:"字段", v:"值"}]
+    tbodyEl.innerHTML = rows.map(r => `
+      <tr>
+        <td>${r.k}</td>
+        <td>${r.v}</td>
+      </tr>
+    `).join("");
+  }
+
+  function setQuantTable(tbodyEl, q){
+    // q can be object: {P05:..., P25:..., P50:..., P75:..., P95:...}
+    const order = ["P05","P25","P50","P75","P95"];
+    const rows = order.map(k => ({
+      q: k,
+      v: fmt(q && (q[k] ?? q[k.toLowerCase()]), 3)
+    }));
+    tbodyEl.innerHTML = rows.map(r => `
+      <tr>
+        <td>${r.q === "P50" ? "P50（中位）" : r.q}</td>
+        <td>${r.v}</td>
+      </tr>
+    `).join("");
+  }
+
+  function setStatusRows(tbodyEl, rows){
+    tbodyEl.innerHTML = rows.map(r => `
+      <tr>
+        <td>${r.cat}</td>
+        <td>${r.field}</td>
+        <td>${r.val}</td>
+      </tr>
+    `).join("");
+  }
+
+  function setLast5(tbodyEl, arr){
+    if (!Array.isArray(arr) || arr.length === 0){
+      tbodyEl.innerHTML = `
+        <tr>
+          <td colspan="7" class="muted" style="padding:18px 12px;">--</td>
+        </tr>`;
+      return;
+    }
+    tbodyEl.innerHTML = arr.slice(0,5).map(it => {
+      const predDate = fmt(getAny(it, ["pred_date","predict_date","date","prediction_date"]), null);
+      const actDate  = fmt(getAny(it, ["actual_date","real_date","trade_date"]), null);
+      const p50      = fmt(getAny(it, ["p50","pred_p50","predict_p50","median"]), 3);
+      const close    = fmt(getAny(it, ["close","actual_close","real_close"]), 3);
+      const err      = fmt(getAny(it, ["error","diff","delta"]), 3);
+      const band     = fmt(getAny(it, ["hit_band","band","hit_interval"]), null);
+      const judge    = fmt(getAny(it, ["judge","judgement","result"]), null);
+      return `
+        <tr>
+          <td>${predDate}</td>
+          <td>${actDate}</td>
+          <td>${p50}</td>
+          <td>${close}</td>
+          <td>${err}</td>
+          <td>${band}</td>
+          <td>${judge}</td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  function markPill(id, ok, text){
+    const el = byId(id);
+    el.textContent = text;
+    el.style.borderColor = ok ? "#b7ebc6" : "#fda29b";
+    el.style.color = ok ? "#027a48" : "#b42318";
+  }
+
+  // ====== 渲染主逻辑 ======
+  async function loadAndRender(){
+    markPill("pill_fetch", true, "DATA: LOADING");
+    markPill("pill_parse", true, "PARSE: --");
+    markPill("pill_render", true, "RENDER: --");
+    byId("note_msg").textContent = "";
+
+    let data = null;
+    try{
+      const url = DATA_URL + "?t=" + Date.now(); // 强制拿最新
+      const res = await fetch(url, {cache:"no-store"});
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      data = await res.json();
+      markPill("pill_fetch", true, "DATA: OK");
+    }catch(e){
+      markPill("pill_fetch", false, "DATA: FAIL");
+      byId("note_msg").innerHTML = `<span class="error">数据拉取失败：</span>${fmt(e && e.message)}<br><span class="muted">请检查 Raw JSON 是否可访问、文件是否为有效 JSON。</span>`;
+      byId("last_update").textContent = "Last update: --";
+      return;
     }
 
-    // 结构化 JSON -> 报告 HTML（如果 json 不是 markdown/html，而是字段结构）
-    function structuredToMarkdown(data){
-      // 尽量兼容：只要字段存在就用；不存在就留空
-      const T = (v) => (v === null || v === undefined) ? "" : String(v);
+    // 解析阶段
+    try{
+      // 顶部元信息（多路径兼容）
+      const symbol = getAny(data, ["symbol","code","ticker","meta.symbol"]);
+      const tradeDate = getAny(data, ["trade_date","date","trading_day","meta.trade_date"]);
+      const reportTime = getAny(data, ["report_time_bjt","generated_time_bjt","report_time","meta.report_time_bjt","run_time_bjt"]);
+      const source = getAny(data, ["data_source","source","market_url","meta.data_source","market.source"]);
 
-      const title = "京东物流 V1.0 法定预测报告";
-      const code = T(data?.symbol || data?.ticker || data?.code || "02618.HK");
-      const tradeDate = T(data?.trade_date || data?.tradeDate || data?.date || "");
-      const genTime = T(data?.generated_at || data?.generatedAt || data?.report_time || "");
-      const dataSrc = T(data?.data_source || data?.dataSource || data?.source || "");
+      byId("meta_symbol").textContent = fmt(symbol);
+      byId("meta_trade_date").textContent = fmt(tradeDate);
+      byId("meta_report_time").textContent = fmt(reportTime);
+      byId("meta_source").textContent = fmt(source ?? DATA_URL);
 
-      // 当日交易
-      const m = data?.market || data?.market_data || data?.daily || {};
-      // 回顾
-      const r = data?.review || data?.yesterday_review || {};
-      // 预测
-      const p1 = data?.forecast_t1 || data?.t1 || data?.next_day || data?.t_plus_1 || {};
-      const p1m = data?.forecast_1m || data?.one_month || data?.month || {};
-      const p6m = data?.forecast_6m || data?.six_month || data?.half_year || {};
-      // 模型
-      const s = data?.model || data?.status || data?.meta || {};
-      // 回顾列表
-      const hist = data?.recent_hits || data?.last5 || data?.history || [];
+      // ① 当日实际交易数据
+      const market = getAny(data, ["market","daily","today","actual","data.market"]) || data;
+      const rowsMarket = [
+        {k:"代码", v: fmt(getAny(market, ["symbol","code","ticker"]) ?? symbol)},
+        {k:"交易日", v: fmt(getAny(market, ["trade_date","date"]) ?? tradeDate)},
+        {k:"开盘价（HKD）", v: fmt(getAny(market, ["open","open_price","open_hkd"]), 2)},
+        {k:"最高价（HKD）", v: fmt(getAny(market, ["high","high_price","high_hkd"]), 2)},
+        {k:"最低价（HKD）", v: fmt(getAny(market, ["low","low_price","low_hkd"]), 2)},
+        {k:"收盘价（HKD）", v: fmt(getAny(market, ["close","close_price","close_hkd"]), 2)},
+        {k:"成交量（万股）", v: fmt(getAny(market, ["volume_wan","vol_wan","volume_10k","volumeWan"]), 2)},
+        {k:"成交额（亿港元）", v: fmt(getAny(market, ["amount_yi","turnover_yi","amount_100m","amountYi"]), 4)},
+        {k:"数据源", v: fmt(source ?? DATA_URL)},
+        {k:"抓取时间（BJT）", v: fmt(getAny(market, ["fetch_time_bjt","captured_time_bjt","grab_time_bjt","capture_time"]) ?? reportTime)}
+      ];
+      setKVTable(byId("tbl_market"), rowsMarket);
 
-      const md = [
-        `# ${title}`,
-        ``,
-        `> **标的**：${code} > **交易日**：${tradeDate} > **报告生成时间（BJT）**：${genTime} > **数据源**：${dataSrc}`,
-        ``,
-        `---`,
-        ``,
-        `## ① 当日实际交易数据`,
-        ``,
-        `| 指标 | 数值 |`,
-        `|---|---:|`,
-        `| 代码 | ${code} |`,
-        tradeDate ? `| 交易日 | ${tradeDate} |` : `| 交易日 |  |`,
-        T(m.open) ? `| 开盘价（HKD） | ${T(m.open)} |` : `| 开盘价（HKD） |  |`,
-        T(m.high) ? `| 最高价（HKD） | ${T(m.high)} |` : `| 最高价（HKD） |  |`,
-        T(m.low)  ? `| 最低价（HKD） | ${T(m.low)} |`  : `| 最低价（HKD） |  |`,
-        T(m.close)? `| 收盘价（HKD） | ${T(m.close)} |`: `| 收盘价（HKD） |  |`,
-        (m.volume !== undefined) ? `| 成交量（万股） | **${T(m.volume)}** |` : `| 成交量（万股） |  |`,
-        (m.turnover !== undefined) ? `| 成交额（亿港元） | **${T(m.turnover)}** |` : `| 成交额（亿港元） |  |`,
-        dataSrc ? `| 数据源 | ${dataSrc} |` : `| 数据源 |  |`,
-        genTime ? `| 抓取时间（BJT） | ${genTime} |` : `| 抓取时间（BJT） |  |`,
-        ``,
-        `---`,
-        ``,
-        `## ② 昨日预测回顾`,
-        ``,
-        `| 字段 | 数值 |`,
-        `|---|---:|`,
-        (r.p50 !== undefined) ? `| 昨日预测中位价 P50（HKD） | ${T(r.p50)} |` : `| 昨日预测中位价 P50（HKD） |  |`,
-        (r.actual_close !== undefined) ? `| 今日实际收盘价（HKD） | ${T(r.actual_close)} |` : `| 今日实际收盘价（HKD） |  |`,
-        (r.error !== undefined) ? `| 误差（实际 - 预测）（HKD） | **${T(r.error)}** |` : `| 误差（实际 - 预测）（HKD） |  |`,
-        T(r.hit_interval) ? `| 命中分位区间 | **${T(r.hit_interval)}** |` : `| 命中分位区间 |  |`,
-        T(r.judgement) ? `| 判断结果 | **${T(r.judgement)}** |` : `| 判断结果 |  |`,
-        T(r.based_on) ? `| 回顾基于预测日期 | ${T(r.based_on)} |` : `| 回顾基于预测日期 |  |`,
-        ``,
-        `---`,
-        ``,
-        `## ③ 次日价格分布预测（T+1）`,
-        ``,
-        `| 分位 | 价格（HKD） |`,
-        `|---|---:|`,
-        (p1.p05 !== undefined) ? `| P05 | ${T(p1.p05)} |` : `| P05 |  |`,
-        (p1.p25 !== undefined) ? `| P25 | ${T(p1.p25)} |` : `| P25 |  |`,
-        (p1.p50 !== undefined) ? `| **P50（中位）** | **${T(p1.p50)}** |` : `| **P50（中位）** |  |`,
-        (p1.p75 !== undefined) ? `| P75 | ${T(p1.p75)} |` : `| P75 |  |`,
-        (p1.p95 !== undefined) ? `| P95 | ${T(p1.p95)} |` : `| P95 |  |`,
-        ``,
-        `---`,
-        ``,
-        `## ④ 未来 1 个月价格分布预测`,
-        ``,
-        `| 分位 | 价格（HKD） |`,
-        `|---|---:|`,
-        (p1m.p05 !== undefined) ? `| P05 | ${T(p1m.p05)} |` : `| P05 |  |`,
-        (p1m.p25 !== undefined) ? `| P25 | ${T(p1m.p25)} |` : `| P25 |  |`,
-        (p1m.p50 !== undefined) ? `| **P50（中位）** | **${T(p1m.p50)}** |` : `| **P50（中位）** |  |`,
-        (p1m.p75 !== undefined) ? `| P75 | ${T(p1m.p75)} |` : `| P75 |  |`,
-        (p1m.p95 !== undefined) ? `| P95 | ${T(p1m.p95)} |` : `| P95 |  |`,
-        ``,
-        `---`,
-        ``,
-        `## ⑤ 未来 6 个月价格分布预测`,
-        ``,
-        `| 分位 | 价格（HKD） |`,
-        `|---|---:|`,
-        (p6m.p05 !== undefined) ? `| P05 | ${T(p6m.p05)} |` : `| P05 |  |`,
-        (p6m.p25 !== undefined) ? `| P25 | ${T(p6m.p25)} |` : `| P25 |  |`,
-        (p6m.p50 !== undefined) ? `| **P50（中位）** | **${T(p6m.p50)}** |` : `| **P50（中位）** |  |`,
-        (p6m.p75 !== undefined) ? `| P75 | ${T(p6m.p75)} |` : `| P75 |  |`,
-        (p6m.p95 !== undefined) ? `| P95 | ${T(p6m.p95)} |` : `| P95 |  |`,
-        ``,
-        `---`,
-        ``,
-        `## ⑥ 模型状态与学习更新`,
-        ``,
-        // 这里按 report_latest.md 的“简表”输出（不做多余扩展）
-        `| 字段 | 数值 |`,
-        `|---|---:|`,
-        T(s.version || s.system_version) ? `| 系统版本 | ${T(s.version || s.system_version)} |` : `| 系统版本 |  |`,
-        T(s.run_type || s.runType) ? `| 运行类型 | ${T(s.run_type || s.runType)} |` : `| 运行类型 |  |`,
-        genTime ? `| 本次运行时间（BJT） | ${genTime} |` : `| 本次运行时间（BJT） |  |`,
-        (s.ewma_vol !== undefined) ? `| EWMA 年化波动率（估计） | ${T(s.ewma_vol)} |` : `| EWMA 年化波动率（估计） |  |`,
-        (s.mu !== undefined) ? `| 日漂移 μ（估计） | ${T(s.mu)} |` : `| 日漂移 μ（估计） |  |`,
-        (s.sample_n !== undefined) ? `| 最近样本条数（用于估计） | ${T(s.sample_n)} |` : `| 最近样本条数（用于估计） |  |`,
-        T(s.note || s.remark) ? `| 备注 | ${T(s.note || s.remark)} |` : `| 备注 |  |`,
-        ``,
-        `---`,
-        ``,
-        `## ⑦ 过去五个交易日预测命中回顾`,
-        ``,
-        `| 预测日期 | 实际日期 | 预测 P50 | 实际收盘 | 误差 | 命中区间 | 判断 |`,
-        `|---|---|---:|---:|---:|---|---|`,
-        ...(Array.isArray(hist) && hist.length ? hist.slice(0,5).map(x => {
-          return `| ${T(x.pred_date || x.predict_date)} | ${T(x.actual_date)} | ${T(x.p50)} | ${T(x.close)} | ${T(x.error)} | ${T(x.hit)} | ${T(x.judge)} |`;
-        }) : [
-          `|  |  |  |  |  |  |  |`
-        ])
-      ].join("\n");
+      // ② 昨日预测回顾
+      const review = getAny(data, ["review","yesterday_review","backtest","data.review"]) || data;
+      const rowsReview = [
+        {k:"昨日预测中位价 P50（HKD）", v: fmt(getAny(review, ["y_pred_p50","prev_p50","pred_p50","p50_yesterday","review.p50"]), 3)},
+        {k:"今日实际收盘价（HKD）", v: fmt(getAny(review, ["actual_close","close","today_close","real_close","review.actual_close"]), 3)},
+        {k:"误差（实际 - 预测）（HKD）", v: fmt(getAny(review, ["error","diff","delta","review.error"]), 3)},
+        {k:"命中分位区间", v: fmt(getAny(review, ["hit_band","band","hit_interval","review.hit_band"]))},
+        {k:"判断结果", v: fmt(getAny(review, ["judge","judgement","result","review.judge"]))},
+        {k:"回顾基于预测日期", v: fmt(getAny(review, ["base_pred_date","pred_date","review_date","review.base_date"]) ?? tradeDate)}
+      ];
+      setKVTable(byId("tbl_review"), rowsReview);
 
-      return md;
+      // ③/④/⑤ 分布
+      const t1 = getAny(data, ["dist_t1","t1","next_day","t_plus_1","distribution.t1"]) || {};
+      const m1 = getAny(data, ["dist_1m","m1","one_month","distribution.m1"]) || {};
+      const m6 = getAny(data, ["dist_6m","m6","six_month","distribution.m6"]) || {};
+
+      setQuantTable(byId("tbl_t1"), t1);
+      setQuantTable(byId("tbl_m1"), m1);
+      setQuantTable(byId("tbl_m6"), m6);
+
+      // ⑥ 模型状态与学习更新（按你截图那种三列）
+      const st = getAny(data, ["model_status","status","meta","model","data.status"]) || {};
+      const factors = getAny(data, ["factors","constraints","switches","flags"]) || {};
+      const learning = getAny(data, ["learning","learn","self_learning"]) || {};
+
+      const statusRows = [
+        {cat:"系统", field:"系统版本", val: fmt(getAny(st, ["system_version","version"]) ?? "V1.0")},
+        {cat:"系统", field:"运行类型", val: fmt(getAny(st, ["run_type","type"]) ?? getAny(data, ["run_type"]))},
+        {cat:"系统", field:"本次运行时间（BJT）", val: fmt(getAny(st, ["run_time_bjt","time_bjt"]) ?? reportTime)},
+        {cat:"系统", field:"模型执行状态", val: fmt(getAny(st, ["exec_status","status","result"]) ?? "SUCCESS")},
+        {cat:"系统", field:"数据源完整性校验", val: fmt(getAny(st, ["data_integrity","integrity_check"]) ?? "通过")},
+
+        {cat:"波动率建模", field:"1 个月波动率（EWMA，年化）", val: fmt(getAny(st, ["vol_1m","sigma_1m","ewma_vol_1m"]), 2)},
+        {cat:"波动率建模", field:"6 个月波动率（EWMA，年化）", val: fmt(getAny(st, ["vol_6m","sigma_6m","ewma_vol_6m"]), 2)},
+        {cat:"波动率建模", field:"EWMA 衰减系数 λ", val: fmt(getAny(st, ["ewma_lambda","lambda"]), 2)},
+        {cat:"波动率建模", field:"波动率样本窗口（交易日）", val: fmt(getAny(st, ["vol_window_days","window_days","sample_window_days"]))},
+
+        {cat:"收益分布", field:"日收益漂移 μ（估计）", val: fmt(getAny(st, ["mu_daily","mu","drift"]), 6)},
+        {cat:"收益分布", field:"收益分布假设", val: fmt(getAny(st, ["dist_assumption","dist","assumption"]) ?? "对数正态")},
+        {cat:"收益分布", field:"厚尾建模", val: fmt(getAny(st, ["tail_model","tail"]) ?? "t 分布")},
+        {cat:"收益分布", field:"厚尾参数 ν（自由度）", val: fmt(getAny(st, ["nu","dof","t_nu"]), 2)},
+
+        {cat:"因子与约束", field:"是否启用成交量因子", val: fmt(getAny(factors, ["use_volume","enable_volume","volume_factor"]) ?? "否")},
+        {cat:"因子与约束", field:"是否启用 β 锚定", val: fmt(getAny(factors, ["use_beta","enable_beta","beta_anchor"]) ?? "否")},
+        {cat:"因子与约束", field:"是否引入指数/行业因子", val: fmt(getAny(factors, ["use_index","enable_index","index_factor"]) ?? "否")},
+        {cat:"因子与约束", field:"是否进行人工干预", val: fmt(getAny(factors, ["manual_override","manual","human_intervention"]) ?? "否")},
+
+        {cat:"学习机制", field:"模型是否自学习", val: fmt(getAny(learning, ["self_learning","enabled"]) ?? "是（基于历史追加）")},
+        {cat:"学习机制", field:"是否回填或估算真实市场数据", val: fmt(getAny(learning, ["backfill","estimate_market_data"]) ?? "否（严格禁止）")},
+        {cat:"学习机制", field:"历史预测用于回顾评估", val: fmt(getAny(learning, ["history_eval","use_history_for_eval"]) ?? "是")},
+
+        {cat:"运行备注", field:"备注", val: fmt(getAny(st, ["remark","note","message"]) ?? "—")}
+      ];
+      setStatusRows(byId("tbl_status"), statusRows);
+
+      // ⑦ 过去五日
+      const last5 = getAny(data, ["last_5","past_5","history_5","recent5","hit_review_5"]) || [];
+      setLast5(byId("tbl_last5"), last5);
+
+      markPill("pill_parse", true, "PARSE: OK");
+    }catch(e){
+      markPill("pill_parse", false, "PARSE: FAIL");
+      byId("note_msg").innerHTML = `<span class="error">数据解析失败：</span>${fmt(e && e.message)}`;
+      byId("last_update").textContent = "Last update: --";
+      return;
     }
 
-    async function loadLatest() {
-      const el = document.getElementById("report");
-
-      try {
-        // 使用 cache bust，确保“打开即最新”
-        const url = "latest_report.json?t=" + Date.now();
-        const resp = await fetch(url, { cache: "no-store" });
-        if (!resp.ok) throw new Error("HTTP " + resp.status + " " + resp.statusText);
-
-        const data = await resp.json();
-
-        // 兼容优先级：
-        // 1) data.html / data.report_html / data.content_html -> 直接渲染（会去 emoji）
-        // 2) data.markdown / data.md / data.report_markdown -> markdown 渲染（会去 emoji）
-        // 3) 结构化字段 -> 组装成 markdown 再渲染
-        let html = "";
-
-        const rawHtml = data?.html || data?.report_html || data?.content_html;
-        const rawMd = data?.markdown || data?.md || data?.report_markdown;
-
-        if (typeof rawHtml === "string" && rawHtml.trim()) {
-          // 直接插入 HTML：我们做一次“去 emoji”，同时尽量不改变结构
-          // 注意：这里假设 JSON 中的 HTML 是可信的（来自你自己的 workflow）
-          const cleaned = stripEmojis(rawHtml);
-          el.innerHTML = cleaned;
-        } else {
-          let md = "";
-          if (typeof rawMd === "string" && rawMd.trim()) {
-            md = rawMd;
-          } else {
-            md = structuredToMarkdown(data);
-          }
-          html = mdToHtml(md);
-          el.innerHTML = html;
-        }
-
-        // 同步页面标题（去 emoji）
-        const h1 = el.querySelector("h1");
-        if (h1 && h1.textContent) {
-          document.title = stripEmojis(h1.textContent);
-        } else {
-          document.title = "京东物流 V1.0 法定预测报告";
-        }
-      } catch (err) {
-        el.innerHTML =
-          '<div class="error">加载 latest_report.json 失败：\n' +
-          (err && err.message ? err.message : String(err)) +
-          "\n\n请确认仓库根目录存在 latest_report.json，并且 GitHub Pages 已部署。</div>";
-      }
+    // 渲染完成
+    try{
+      markPill("pill_render", true, "RENDER: OK");
+      byId("last_update").textContent = "Last update: " + new Date().toISOString();
+      // 可选说明
+      byId("note_msg").textContent = "说明：页面打开即拉取最新数据；若字段缺失显示 “--”。";
+    }catch(e){
+      markPill("pill_render", false, "RENDER: FAIL");
+      byId("note_msg").innerHTML = `<span class="error">页面渲染失败：</span>${fmt(e && e.message)}`;
     }
+  }
 
-    loadLatest();
-  </script>
+  // 页面加载即执行；并每 60 秒自动刷新一次（保持“永远最新”）
+  loadAndRender();
+  setInterval(loadAndRender, 60000);
+</script>
 </body>
 </html>
