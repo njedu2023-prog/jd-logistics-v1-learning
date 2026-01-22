@@ -57,7 +57,10 @@ STATE_PATH = STATE_DIR / "state.json"
 RUN_LOG_PATH = RUNS_DIR / "run_log.jsonl"
 
 REPORT_PATH = REPO_ROOT / "report_latest.md"
-LATEST_REPORT_JSON_PATH = REPO_ROOT / "latest_report.json"
+
+# ✅ 修复：同时写入 root 与 runs，避免破坏旧引用，同时确保 runs/latest_report.json 更新
+LATEST_REPORT_JSON_PATH_ROOT = REPO_ROOT / "latest_report.json"
+LATEST_REPORT_JSON_PATH_RUNS = RUNS_DIR / "latest_report.json"
 
 
 # =========================
@@ -561,7 +564,7 @@ def main() -> None:
             f.write(report)
 
         # 8) 写 latest_report.json（给 HTML 用）
-        save_json(LATEST_REPORT_JSON_PATH, {
+        payload = {
             "status": "SUCCESS",
             "symbol": SYMBOL,
             "trade_date": str(market_row.get("trade_date", "")),
@@ -596,7 +599,11 @@ def main() -> None:
                 "symbol": SYMBOL,
             },
             "module_7_last5_hit": load_last_n_jsonl(EVAL_PATH, 5),
-        })
+        }
+
+        # ✅ 关键修复：写两份，确保 runs/latest_report.json 一定更新
+        save_json(LATEST_REPORT_JSON_PATH_ROOT, payload)
+        save_json(LATEST_REPORT_JSON_PATH_RUNS, payload)
 
         run_log["status"] = "SUCCESS"
         append_jsonl(RUN_LOG_PATH, run_log)
