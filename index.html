@@ -3,6 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <title>京东物流 V1.0 法定预测报告</title>
   <style>
     body{
@@ -10,83 +13,293 @@
       margin:18px;background:#f6f7f9;color:#111
     }
     .wrap{max-width:1480px;margin:0 auto}
-    .card{background:#fff;border:1px solid #e6e8eb;border-radius:12px;padding:18px;margin:14px 0;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+    .card{
+      background:#fff;border:1px solid #e6e8eb;border-radius:12px;
+      padding:18px;margin:14px 0;box-shadow:0 1px 2px rgba(0,0,0,.04)
+    }
     h1{font-size:22px;margin:0 0 10px 0}
-    .meta{font-size:13px;color:#555;line-height:1.6}
-    .row{display:flex;gap:12px;flex-wrap:wrap}
-    .badge{background:#f1f3f5;border:1px solid #e6e8eb;border-radius:10px;padding:6px 10px;font-size:13px;color:#333}
-    .btn{cursor:pointer;border:1px solid #e6e8eb;background:#fff;border-radius:10px;padding:8px 12px;font-size:13px}
-    .err{color:#b42318}
-    .hint{font-size:12px;color:#666;margin-top:8px}
-    pre{white-space:pre-wrap;word-break:break-word;margin:12px 0 0 0;font-size:13px;line-height:1.55}
     .topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .badge{
+      background:#f1f3f5;border:1px solid #e6e8eb;border-radius:10px;
+      padding:6px 10px;font-size:13px;color:#333
+    }
+    .btn{
+      cursor:pointer;border:1px solid #e6e8eb;background:#fff;border-radius:10px;
+      padding:8px 12px;font-size:13px
+    }
+    .meta{font-size:13px;color:#555;line-height:1.7;margin-top:6px}
+    .hint{font-size:12px;color:#666;margin-top:8px}
+    .ok{color:#067647}
+    .warn{color:#b54708}
+    .err{color:#b42318}
+    pre{
+      white-space:pre-wrap;word-break:break-word;margin:12px 0 0 0;
+      font-size:13px;line-height:1.55;background:#fbfcfe;border:1px solid #eef0f3;
+      border-radius:10px;padding:12px
+    }
+    table{width:100%;border-collapse:collapse;margin-top:10px}
+    th,td{border:1px solid #eef0f3;padding:10px;font-size:13px;text-align:left;vertical-align:top}
+    th{background:#fbfcfe;color:#333}
+    a{color:#0969da;text-decoration:none}
+    a:hover{text-decoration:underline}
   </style>
 </head>
+
 <body>
   <div class="wrap">
     <div class="card">
       <div class="topbar">
         <h1>京东物流 V1.0 法定预测报告</h1>
         <div class="row">
-          <button class="btn" onclick="loadReport()">刷新数据</button>
-          <span class="badge" id="status">状态：加载中…</span>
+          <button class="btn" id="btnRefresh">刷新数据</button>
+          <button class="btn" id="btnAuto">自动刷新：关</button>
+          <span class="badge" id="status">状态：初始化…</span>
         </div>
       </div>
 
-      <div id="meta" class="meta">正在加载 latest_report.json ...</div>
-      <div class="hint">说明：本页每次打开都会自动拉取最新 latest_report.json（已禁用缓存），保证“打开即最新”。</div>
+      <div class="meta" id="metaLine1">数据源：/latest_report.json（打开即最新；强制禁用缓存）</div>
+      <div class="meta" id="metaLine2">页面刷新：—</div>
+      <div class="hint">
+        说明：本页每次打开都会自动抓取最新 latest_report.json；若网络波动，会自动重试。你看到的“页面刷新时间”每次都会变化，证明不是缓存页。
+      </div>
+    </div>
 
+    <div class="card">
+      <div class="topbar">
+        <h1 style="font-size:18px;margin:0">法定摘要（关键字段）</h1>
+      </div>
+      <div id="summary"></div>
+    </div>
+
+    <div class="card">
+      <div class="topbar">
+        <h1 style="font-size:18px;margin:0">原始 JSON（可审计）</h1>
+        <div class="row">
+          <span class="badge" id="jsonSize">大小：—</span>
+          <a class="badge" id="rawLink" href="#" target="_blank" rel="noopener noreferrer">打开 latest_report.json</a>
+        </div>
+      </div>
       <pre id="out"></pre>
     </div>
   </div>
 
 <script>
-async function loadReport(){
-  const meta = document.getElementById('meta');
-  const out  = document.getElementById('out');
-  const status = document.getElementById('status');
+(() => {
+  // ========= 配置（稳妥优先） =========
+  const REPORT_PATH = 'latest_report.json';     // 根目录同级
+  const TIMEOUT_MS  = 8000;                     // 单次请求超时
+  const RETRY_MAX   = 3;                        // 失败重试次数
+  const RETRY_GAP_MS= 800;                      // 重试间隔
+  const AUTO_REFRESH_MS = 60_000;               // 自动刷新间隔（1分钟）
 
-  try{
-    status.textContent = '状态：抓取中…';
+  // ========= DOM =========
+  const statusEl   = document.getElementById('status');
+  const meta2El    = document.getElementById('metaLine2');
+  const outEl      = document.getElementById('out');
+  const summaryEl  = document.getElementById('summary');
+  const sizeEl     = document.getElementById('jsonSize');
+  const rawLinkEl  = document.getElementById('rawLink');
+  const btnRefresh = document.getElementById('btnRefresh');
+  const btnAuto    = document.getElementById('btnAuto');
 
-    // ✅ 打开即最新关键：禁用缓存 + URL 加时间戳
-    const url = 'latest_report.json?t=' + Date.now();
-    const r = await fetch(url, { cache: 'no-store' });
-    if(!r.ok) throw new Error('HTTP ' + r.status + ' ' + r.statusText);
+  let autoTimer = null;
 
-    const data = await r.json();
-
-    // 兼容字段（不改你JSON结构也能显示）
-    const symbol = data.symbol || data.code || data.ticker || '02618.HK';
-    const date   = data.date || data.trade_date || data.trading_date || '未知';
-    const genTs  = data.generated_at || data.generatedAt || data.report_time || '';
-
-    meta.innerHTML = `
-      <div class="row">
-        <div class="badge">代码：${symbol}</div>
-        <div class="badge">时间：${date}</div>
-        <div class="badge">页面刷新：${new Date().toISOString()}</div>
-      </div>
-      <div style="margin-top:8px">
-        数据源：/latest_report.json（no-store + 时间戳防缓存）
-        ${genTs ? `｜报告生成时间：${genTs}` : ``}
-      </div>
-    `;
-
-    // 先原样展示，确保“永远最新”链路 100% 稳
-    out.textContent = JSON.stringify(data, null, 2);
-
-    status.textContent = '状态：已更新 ✅';
-  }catch(e){
-    status.textContent = '状态：失败 ❌';
-    meta.innerHTML = `<div class="err">加载失败：${e.message}</div>
-      <div class="meta">请确认仓库根目录存在 latest_report.json，并且 GitHub Pages 已发布到 root。</div>`;
-    out.textContent = '';
+  function setStatus(text, cls){
+    statusEl.className = 'badge ' + (cls || '');
+    statusEl.textContent = text;
   }
-}
 
-// ✅ 打开页面自动执行一次 = “打开即最新”
-loadReport();
+  function isoNow(){
+    return new Date().toISOString();
+  }
+
+  function fmtNum(x){
+    if (x === null || x === undefined || x === '') return '—';
+    const n = Number(x);
+    if (!Number.isFinite(n)) return String(x);
+    // 不强行加货币符号，保持中性、可审计
+    return n.toLocaleString('zh-CN', { maximumFractionDigits: 4 });
+  }
+
+  function safeText(node, text){
+    node.textContent = (text === null || text === undefined) ? '' : String(text);
+  }
+
+  function clearNode(node){
+    while (node.firstChild) node.removeChild(node.firstChild);
+  }
+
+  function buildSummaryTable(data){
+    clearNode(summaryEl);
+
+    const symbol = data.symbol || data.code || data.ticker || '02618.HK';
+    const tradeDate = data.trade_date || data.date || data.trading_date || '未知';
+    const genBjt = data.generated_at_bjt || data.generated_at || data.generatedAt || data.report_time || '—';
+    const reason = data.report_reason || data.reason || '—';
+
+    const m1 = data.module_1_market || {};
+    const open  = m1.open;
+    const high  = m1.high;
+    const low   = m1.low;
+    const close = m1.close;
+    const volume = m1.volume;
+    const turnover = m1.turnover || m1.amount;
+
+    const sourceUrl = m1.source_url || m1.source_uri || data.source_url || data.source_uri || '—';
+    const fetchedBjt = m1.fetched_at_bjt || data.fetched_at_bjt || '—';
+
+    const table = document.createElement('table');
+    const thead = document.createElement('thead');
+    const trh = document.createElement('tr');
+    ['字段', '值'].forEach(t => {
+      const th = document.createElement('th');
+      th.textContent = t;
+      trh.appendChild(th);
+    });
+    thead.appendChild(trh);
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    const rows = [
+      ['代码', symbol],
+      ['交易日', tradeDate],
+      ['报告生成时间（BJT）', genBjt],
+      ['市场数据抓取时间（BJT）', fetchedBjt],
+      ['报告说明', reason],
+      ['开盘价', fmtNum(open)],
+      ['最高价', fmtNum(high)],
+      ['最低价', fmtNum(low)],
+      ['收盘价', fmtNum(close)],
+      ['成交量', fmtNum(volume)],
+      ['成交额', fmtNum(turnover)],
+      ['数据来源 URL', sourceUrl],
+    ];
+
+    rows.forEach(([k, v]) => {
+      const tr = document.createElement('tr');
+      const td1 = document.createElement('td'); td1.textContent = k;
+      const td2 = document.createElement('td');
+
+      // URL 这种字段：如果看起来像 http，就做成可点击链接；否则纯文本
+      if (typeof v === 'string' && /^https?:\/\//i.test(v)) {
+        const a = document.createElement('a');
+        a.href = v;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.textContent = v;
+        td2.appendChild(a);
+      } else {
+        td2.textContent = (v === null || v === undefined || v === '') ? '—' : String(v);
+      }
+
+      tr.appendChild(td1);
+      tr.appendChild(td2);
+      tbody.appendChild(tr);
+    });
+
+    table.appendChild(tbody);
+    summaryEl.appendChild(table);
+  }
+
+  async function fetchWithTimeout(url, timeoutMs){
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+
+    try{
+      const res = await fetch(url, {
+        cache: 'no-store',
+        signal: ctrl.signal,
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
+      return res;
+    } finally {
+      clearTimeout(t);
+    }
+  }
+
+  async function loadReport(){
+    setStatus('状态：抓取中…', 'warn');
+    meta2El.textContent = '页面刷新：' + isoNow();
+
+    // ✅ 核心：时间戳防缓存
+    const url = `${REPORT_PATH}?t=${Date.now()}`;
+    rawLinkEl.href = REPORT_PATH; // 这里不加时间戳，方便审计与对外分享固定链接
+
+    let lastErr = null;
+
+    for (let i=0; i<RETRY_MAX; i++){
+      try{
+        if (i > 0) {
+          setStatus(`状态：重试中…（${i}/${RETRY_MAX-1}）`, 'warn');
+          await new Promise(r => setTimeout(r, RETRY_GAP_MS));
+        }
+
+        const res = await fetchWithTimeout(url, TIMEOUT_MS);
+        if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+
+        const text = await res.text();
+        sizeEl.textContent = '大小：' + new Blob([text]).size.toLocaleString('zh-CN') + ' bytes';
+
+        // 解析 JSON（稳妥：先 text，再 JSON.parse，能更好报错）
+        let data;
+        try{
+          data = JSON.parse(text);
+        }catch(e){
+          throw new Error('JSON 解析失败：' + e.message);
+        }
+
+        // 摘要表
+        buildSummaryTable(data);
+
+        // 原始 JSON（安全：textContent）
+        outEl.textContent = JSON.stringify(data, null, 2);
+
+        setStatus('状态：已更新', 'ok');
+        return; // 成功就结束
+      }catch(e){
+        lastErr = e;
+      }
+    }
+
+    // 全部失败
+    setStatus('状态：失败', 'err');
+    clearNode(summaryEl);
+
+    const p = document.createElement('div');
+    p.className = 'meta err';
+    p.textContent = '加载失败：' + (lastErr ? lastErr.message : '未知错误');
+    summaryEl.appendChild(p);
+
+    outEl.textContent = '';
+  }
+
+  function setAuto(on){
+    if (on){
+      if (autoTimer) return;
+      autoTimer = setInterval(loadReport, AUTO_REFRESH_MS);
+      btnAuto.textContent = '自动刷新：开（1分钟）';
+      setStatus('状态：自动刷新已开启', 'ok');
+    } else {
+      if (autoTimer){
+        clearInterval(autoTimer);
+        autoTimer = null;
+      }
+      btnAuto.textContent = '自动刷新：关';
+    }
+  }
+
+  // 按钮
+  btnRefresh.addEventListener('click', loadReport);
+  btnAuto.addEventListener('click', () => setAuto(!autoTimer));
+
+  // ✅ 打开即最新
+  loadReport();
+})();
 </script>
 </body>
 </html>
