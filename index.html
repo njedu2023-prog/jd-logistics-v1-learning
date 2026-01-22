@@ -76,6 +76,7 @@
       color:var(--muted);
       line-height:1.6;
       font-weight:500;
+      word-break:break-word;
     }
 
     .bad{
@@ -124,12 +125,6 @@
       line-height:1.7;
     }
 
-    .mono{
-      font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New";
-      font-size:var(--fs-body);
-    }
-    .mono-wrap{word-break:break-all;white-space:normal}
-
     table{
       width:100%;
       border-collapse:collapse;
@@ -158,7 +153,7 @@
     .scrollX{overflow:auto}
     .divider{height:1px;background:var(--line);margin:10px 0}
 
-    /* ③ 次日分布：值靠左对齐 */
+    /* ③ 次日分布：值靠左对齐（如果你想全部居中，把这里删掉） */
     #m3c th, #m3c td { text-align:left !important; }
   </style>
 </head>
@@ -185,15 +180,11 @@
   </div>
 
   <div class="card"><h2>① 当日实际交易数据</h2><div id="m1c"></div></div>
-
+  <div class="card"><h2>② 昨日预测回顾</h2><div id="m2c"></div></div>
   <div class="card"><h2>③ 次日价格分布预测</h2><div id="m3c"></div></div>
   <div class="card"><h2>④ 未来 1 个月价格分布预测</h2><div id="m4c"></div></div>
   <div class="card"><h2>⑤ 未来 6 个月价格分布预测</h2><div id="m5c"></div></div>
-
-  <div class="card"><h2>② 昨日预测回顾</h2><div id="m2c"></div></div>
-
   <div class="card"><h2>⑥ 模型状态与学习更新</h2><div id="m6c"></div></div>
-
   <div class="card"><h2>⑦ 过去五个交易日预测命中回顾</h2><div id="m7c"></div></div>
 
   <div class="card">
@@ -208,18 +199,15 @@
 
 <script>
 /* =========================================================
- *  1) 配置区：现在只读 report_latest.md
+ *  1) 配置区：只读 report_latest.md（同目录）
  * ========================================================= */
 const CONFIG = {
-  // ✅ 主数据：从同仓库同目录的 report_latest.md 读取
   REPORT_MD_URL: 'report_latest.md',
-
-  // 自动刷新间隔（毫秒）
   AUTO_REFRESH_MS: 60000
 };
 
 /* =========================================================
- *  2) DOM 简化
+ *  2) DOM
  * ========================================================= */
 const $ = (id) => document.getElementById(id);
 const UI = {
@@ -247,21 +235,21 @@ function markPill(el, ok, text){
   el.style.color = ok ? "#027a48" : "#b42318";
 }
 
+function escapeHtml(input){
+  return String(input)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
 function smallEmpty(text='暂无数据'){
   return `<div class="small">${escapeHtml(text)}</div>`;
 }
 
-function escapeHtml(input){
-  return String(input)
-    .replaceAll('&','&amp;')
-    .replaceAll('<','&lt;')
-    .replaceAll('>','&gt;')
-    .replaceAll('"','&quot;')
-    .replaceAll("'","&#39;");
-}
-
 /* =========================================================
- *  3) 读取 MD：fetch text（带 cache bust）
+ *  3) 读取 MD：fetch text（cache bust）
  * ========================================================= */
 async function fetchText(url){
   const u = url + (url.includes('?') ? '&' : '?') + '_=' + Date.now();
@@ -272,33 +260,28 @@ async function fetchText(url){
 
 /* =========================================================
  *  4) 从 report_latest.md 抽取：顶部 meta + ①~⑦ 表格
- *     关键点：MD 里本来就是 <table>...</table>，我们原样取出
+ *     关键：MD 里的表格是真实 <table>...</table>
  * ========================================================= */
 function pickLine(md, prefix){
-  const m = md.match(new RegExp('^' + prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*(.*)$', 'm'));
+  const safe = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const m = md.match(new RegExp('^' + safe + '\\s*(.*)$', 'm'));
   return m ? (m[1] || '').trim() : '';
 }
 
 function pickTitle(md){
-  // 第一行通常是“京东物流 V1.0 法定预测报告”
   const m = md.match(/^(.+)\r?\n/m);
   return m ? m[1].trim() : '京东物流 V1.0 法定预测报告';
 }
 
 function pickSectionTable(md, sectionTitle){
-  // 例如：sectionTitle = '① 当日实际交易数据'
-  // 找到该标题后，抓取其后第一个 <table>...</table>
   const idx = md.indexOf(sectionTitle);
   if(idx < 0) return '';
-
   const tail = md.slice(idx);
   const t = tail.match(/<table[\s\S]*?<\/table>/i);
   return t ? t[0] : '';
 }
 
 function normalizeMD(md){
-  // 清理一些重复标题行（比如“③ 次日价格分布预测”出现两次）
-  // 我们不改内容，只用于更稳健的抽取
   return md.replace(/\r/g, '');
 }
 
@@ -308,8 +291,8 @@ function parseReportLatestMD(mdRaw){
   const title = pickTitle(md);
   const code = pickLine(md, '代码：');
   const tradeDate = pickLine(md, '交易日：');
-  const genTime = pickLine(md, '报告生成时间\\(BJT\\)：');
-  // 数据源这一行可能带链接
+  const genTime = pickLine(md, '报告生成时间(BJT)：');
+
   let dataSource = '';
   const dsMatch = md.match(/^数据源：\s*(.*)$/m);
   if(dsMatch) dataSource = dsMatch[1].trim();
@@ -322,14 +305,7 @@ function parseReportLatestMD(mdRaw){
   const m6 = pickSectionTable(md, '⑥ 模型状态与学习更新');
   const m7 = pickSectionTable(md, '⑦ 过去五个交易日预测命中回顾');
 
-  return {
-    title,
-    code,
-    tradeDate,
-    genTime,
-    dataSource,
-    m1, m2, m3, m4, m5, m6, m7
-  };
+  return { title, code, tradeDate, genTime, dataSource, m1, m2, m3, m4, m5, m6, m7 };
 }
 
 /* =========================================================
@@ -342,8 +318,11 @@ function setStatus(ok, text, hint){
   UI.hint().textContent = hint || '';
 }
 
+function stripTags(s){
+  return String(s || '').replace(/<[^>]*>/g, '');
+}
+
 function renderFromParsed(p){
-  // 顶部 meta 行：完全用 MD 的字段
   const meta = [
     `股票代码：${p.code || '—'}`,
     `交易日：${p.tradeDate || '—'}`,
@@ -351,7 +330,6 @@ function renderFromParsed(p){
   ].join(' ｜ ');
   UI.metaLine().textContent = meta;
 
-  // 模块：如果表不存在就提示
   UI.m1().innerHTML = p.m1 ? `<div class="scrollX">${p.m1}</div>` : smallEmpty('未在 report_latest.md 中找到 ① 的表格');
   UI.m2().innerHTML = p.m2 ? `<div class="scrollX">${p.m2}</div>` : smallEmpty('未在 report_latest.md 中找到 ② 的表格');
   UI.m3().innerHTML = p.m3 ? `<div class="scrollX">${p.m3}</div>` : smallEmpty('未在 report_latest.md 中找到 ③ 的表格');
@@ -386,7 +364,10 @@ async function loadAndRender(){
     try{
       renderFromParsed(parsed);
       markPill(UI.pillRender(), true, 'RENDER: OK');
-      setStatus(true, '报告有效', parsed.dataSource ? ('数据源：' + parsed.dataSource.replace(/<[^>]*>/g,'')) : '');
+
+      const hint = parsed.dataSource ? ('数据源：' + stripTags(parsed.dataSource)) : '';
+      setStatus(true, '报告有效', hint);
+
       UI.lastUpdate().textContent = 'Last update: ' + new Date().toISOString();
     }catch(e){
       markPill(UI.pillRender(), false, 'RENDER: FAIL');
