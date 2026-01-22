@@ -204,6 +204,8 @@
   <div class="card"><h2>② 昨日预测回顾</h2><div id="m2c"></div></div>
 
   <div class="card"><h2>⑥ 模型状态与学习更新</h2><div id="m6c"></div></div>
+
+  <!-- ✅ 已按你要求：把“⑦ 过去五个交易日预测命中回顾”改成截图2的表头与数据结构 -->
   <div class="card"><h2>⑦ 过去五个交易日预测命中回顾</h2><div id="m7c"></div></div>
 
   <div class="card">
@@ -298,7 +300,7 @@ const FIELD_ZH = {
   jump_sigma_min: '跳跃σ下限',
   jump_sigma_max: '跳跃σ上限',
 
-  // 模块⑦
+  // 模块⑦（保留原字段翻译，方便未来要展示时用）
   eval_date: '评估日期',
   target_trade_date: '目标交易日',
   actual_close: '实际收盘价',
@@ -326,7 +328,7 @@ function escapeHtml(s){
 }
 
 function isNumber(x){ return typeof x === 'number' && Number.isFinite(x); }
-function fmtNumber(n, digits=2){ return n.toFixed(digits); }
+function fmtNumber(n, digits=3){ return n.toFixed(digits); }
 
 function fmtValueByKey(v, k){
   if(!isNumber(v)) return String(v);
@@ -497,6 +499,59 @@ function buildFallbackReport(market){
   };
 }
 
+/** ✅ 模块⑦：按“截图2”的列结构渲染（更简洁的 7 列） */
+function renderHitReviewLikeShot2(arr){
+  if(!Array.isArray(arr) || arr.length === 0){
+    return '<div class="small">暂无数据</div>';
+  }
+
+  const toNum = (x) => (typeof x === 'number' ? x : (x == null ? null : Number(x)));
+  const fmt2 = (x) => (typeof x === 'number' && Number.isFinite(x)) ? x.toFixed(3).replace(/0+$/,'').replace(/\.$/,'') : (x == null ? '' : String(x));
+
+  const rows = arr.map(r=>{
+    const predDate   = r?.pred_ref_date ?? r?.eval_date ?? '';
+    const actualDate = r?.target_trade_date ?? '';
+    const p50        = toNum(r?.pred_median_t1);
+    const actual     = toNum(r?.actual_close);
+
+    // 误差：优先 abs_error，否则用 实际-预测P50
+    let err = toNum(r?.abs_error);
+    if(err == null && p50 != null && actual != null) err = actual - p50;
+
+    const hitBand = r?.hit_bucket ?? r?.hit_band ?? '';
+    const judge   = r?.judge ?? '';
+
+    return `<tr>
+      <td>${escapeHtml(predDate)}</td>
+      <td>${escapeHtml(actualDate)}</td>
+      <td>${escapeHtml(fmt2(p50))}</td>
+      <td>${escapeHtml(fmt2(actual))}</td>
+      <td>${escapeHtml(fmt2(err))}</td>
+      <td>${escapeHtml(hitBand)}</td>
+      <td>${escapeHtml(judge)}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div class="scrollX">
+      <table>
+        <thead>
+          <tr>
+            <th>预测日期</th>
+            <th>实际日期</th>
+            <th>预测P50</th>
+            <th>实际收盘</th>
+            <th>误差</th>
+            <th>命中区间</th>
+            <th>判断</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
 function renderReport(d){
   // 顶部 meta
   $('metaLine').textContent =
@@ -542,26 +597,8 @@ function renderReport(d){
     ]
   });
 
-  // ⑦
-  $('m7c').innerHTML = arrayTable(d.module_7_last5_hit, {
-    excludeKeys: ['symbol'],
-    preferredOrder: [
-      'eval_date',
-      'target_trade_date',
-      'pred_ref_date',
-      'pred_median_t1',
-      'pred_p25_t1',
-      'pred_p75_t1',
-      'actual_close',
-      'abs_error',
-      'rel_error_pct',
-      'hit_bucket',
-      'judge',
-      'volume_percentile_20d',
-      'run_id',
-      'remark'
-    ]
-  });
+  // ✅ ⑦：按截图2的结构渲染（替换掉原先“截图1”的大表）
+  $('m7c').innerHTML = renderHitReviewLikeShot2(d.module_7_last5_hit);
 }
 
 async function fetchJson(url){
