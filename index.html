@@ -3,9 +3,6 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
   <title>京东物流 V1.0 法定预测报告</title>
   <style>
     body{
@@ -13,293 +10,233 @@
       margin:18px;background:#f6f7f9;color:#111
     }
     .wrap{max-width:1480px;margin:0 auto}
-    .card{
-      background:#fff;border:1px solid #e6e8eb;border-radius:12px;
-      padding:18px;margin:14px 0;box-shadow:0 1px 2px rgba(0,0,0,.04)
-    }
-    h1{font-size:22px;margin:0 0 10px 0}
+    .card{background:#fff;border:1px solid #e6e8eb;border-radius:12px;padding:18px;margin:14px 0;box-shadow:0 1px 2px rgba(0,0,0,.04)}
     .topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+    h1{font-size:22px;margin:0}
     .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-    .badge{
-      background:#f1f3f5;border:1px solid #e6e8eb;border-radius:10px;
-      padding:6px 10px;font-size:13px;color:#333
-    }
-    .btn{
-      cursor:pointer;border:1px solid #e6e8eb;background:#fff;border-radius:10px;
-      padding:8px 12px;font-size:13px
-    }
-    .meta{font-size:13px;color:#555;line-height:1.7;margin-top:6px}
+    .badge{background:#f1f3f5;border:1px solid #e6e8eb;border-radius:10px;padding:6px 10px;font-size:13px;color:#333}
+    .btn{cursor:pointer;border:1px solid #e6e8eb;background:#fff;border-radius:10px;padding:8px 12px;font-size:13px}
+    .meta{font-size:13px;color:#555;line-height:1.7;margin-top:10px}
     .hint{font-size:12px;color:#666;margin-top:8px}
-    .ok{color:#067647}
-    .warn{color:#b54708}
     .err{color:#b42318}
-    pre{
-      white-space:pre-wrap;word-break:break-word;margin:12px 0 0 0;
-      font-size:13px;line-height:1.55;background:#fbfcfe;border:1px solid #eef0f3;
-      border-radius:10px;padding:12px
+    .sec-title{font-size:15px;font-weight:700;margin:0 0 10px 0}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th,td{border:1px solid #e6e8eb;padding:8px 10px;vertical-align:top}
+    th{background:#f7f8fa;text-align:left;white-space:nowrap}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
+    .muted{color:#666}
+    .ok{color:#1a7f37;font-weight:600}
+    .bad{color:#b42318;font-weight:600}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media (max-width: 980px){
+      .grid2{grid-template-columns:1fr}
     }
-    table{width:100%;border-collapse:collapse;margin-top:10px}
-    th,td{border:1px solid #eef0f3;padding:10px;font-size:13px;text-align:left;vertical-align:top}
-    th{background:#fbfcfe;color:#333}
-    a{color:#0969da;text-decoration:none}
-    a:hover{text-decoration:underline}
+    .kv{display:grid;grid-template-columns:160px 1fr;gap:8px 12px}
+    .kv .k{color:#666}
+    .kv .v{color:#111}
+    .hr{height:1px;background:#e6e8eb;margin:12px 0}
+    .note{font-size:12px;color:#666;line-height:1.6}
   </style>
 </head>
-
 <body>
   <div class="wrap">
     <div class="card">
       <div class="topbar">
         <h1>京东物流 V1.0 法定预测报告</h1>
         <div class="row">
-          <button class="btn" id="btnRefresh">刷新数据</button>
-          <button class="btn" id="btnAuto">自动刷新：关</button>
-          <span class="badge" id="status">状态：初始化…</span>
+          <button class="btn" onclick="loadReport()">刷新数据</button>
+          <span class="badge" id="status">状态：加载中…</span>
         </div>
       </div>
 
-      <div class="meta" id="metaLine1">数据源：/latest_report.json（打开即最新；强制禁用缓存）</div>
-      <div class="meta" id="metaLine2">页面刷新：—</div>
-      <div class="hint">
-        说明：本页每次打开都会自动抓取最新 latest_report.json；若网络波动，会自动重试。你看到的“页面刷新时间”每次都会变化，证明不是缓存页。
-      </div>
+      <div id="meta" class="meta">正在加载 latest_report.json ...</div>
+      <div class="hint">说明：本页每次打开都会自动拉取最新 latest_report.json（已禁用缓存），保证“打开即最新”。</div>
     </div>
 
     <div class="card">
-      <div class="topbar">
-        <h1 style="font-size:18px;margin:0">法定摘要（关键字段）</h1>
-      </div>
-      <div id="summary"></div>
+      <div class="sec-title">① 当日实际交易数据</div>
+      <div id="m1"></div>
+      <div class="note" id="m1_note"></div>
     </div>
 
     <div class="card">
-      <div class="topbar">
-        <h1 style="font-size:18px;margin:0">原始 JSON（可审计）</h1>
-        <div class="row">
-          <span class="badge" id="jsonSize">大小：—</span>
-          <a class="badge" id="rawLink" href="#" target="_blank" rel="noopener noreferrer">打开 latest_report.json</a>
-        </div>
-      </div>
-      <pre id="out"></pre>
+      <div class="sec-title">② 昨日预测回顾</div>
+      <div id="m2"></div>
     </div>
+
+    <div class="card">
+      <div class="sec-title">③ 次日价格分布预测（T+1）</div>
+      <div id="m3"></div>
+      <div class="note">说明：分位点 p 表示“价格不超过该值的概率”。例如 p=0.50 为中位数（P50）。</div>
+    </div>
+
+    <div class="card">
+      <div class="sec-title">④ 未来1个月价格分布预测</div>
+      <div id="m4"></div>
+      <div class="note">说明：分位点为模型在未来 1 个月期末价格的概率分布估计。</div>
+    </div>
+
+    <div class="card">
+      <div class="sec-title">⑤ 未来6个月价格分布预测</div>
+      <div id="m5"></div>
+      <div class="note">说明：分位点为模型在未来 6 个月期末价格的概率分布估计。</div>
+    </div>
+
+    <div class="card">
+      <div class="sec-title">⑥ 模型状态与学习更新</div>
+      <div id="m6"></div>
+      <div class="note">说明：此板块用于披露模型版本、参数与学习状态（不包含任何交易建议）。</div>
+    </div>
+
+    <div class="card">
+      <div class="sec-title">⑦ 过去五个交易日预测命中回顾</div>
+      <div id="m7"></div>
+    </div>
+
   </div>
 
 <script>
-(() => {
-  // ========= 配置（稳妥优先） =========
-  const REPORT_PATH = 'latest_report.json';     // 根目录同级
-  const TIMEOUT_MS  = 8000;                     // 单次请求超时
-  const RETRY_MAX   = 3;                        // 失败重试次数
-  const RETRY_GAP_MS= 800;                      // 重试间隔
-  const AUTO_REFRESH_MS = 60_000;               // 自动刷新间隔（1分钟）
+function esc(s){
+  return String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function fmtNum(x, digits=3){
+  if(x===null || x===undefined || x==='' || Number.isNaN(Number(x))) return '—';
+  const n = Number(x);
+  return n.toFixed(digits);
+}
+function fmtInt(x){
+  if(x===null || x===undefined || x==='' || Number.isNaN(Number(x))) return '—';
+  return String(Math.round(Number(x)));
+}
+function fmtMoney(x, digits=2){
+  if(x===null || x===undefined || x==='' || Number.isNaN(Number(x))) return '—';
+  return Number(x).toFixed(digits);
+}
+function pct(x, digits=2){
+  if(x===null || x===undefined || x==='' || Number.isNaN(Number(x))) return '—';
+  return (Number(x)*100).toFixed(digits) + '%';
+}
 
-  // ========= DOM =========
-  const statusEl   = document.getElementById('status');
-  const meta2El    = document.getElementById('metaLine2');
-  const outEl      = document.getElementById('out');
-  const summaryEl  = document.getElementById('summary');
-  const sizeEl     = document.getElementById('jsonSize');
-  const rawLinkEl  = document.getElementById('rawLink');
-  const btnRefresh = document.getElementById('btnRefresh');
-  const btnAuto    = document.getElementById('btnAuto');
-
-  let autoTimer = null;
-
-  function setStatus(text, cls){
-    statusEl.className = 'badge ' + (cls || '');
-    statusEl.textContent = text;
+function tableKV(rows){
+  let html = '<table><tbody>';
+  for(const [k,v] of rows){
+    html += `<tr><th>${esc(k)}</th><td>${v}</td></tr>`;
   }
+  html += '</tbody></table>';
+  return html;
+}
 
-  function isoNow(){
-    return new Date().toISOString();
+function tableDist(arr){
+  const rows = Array.isArray(arr) ? arr : [];
+  let html = '<table><thead><tr><th>分位点 p</th><th>价格 v（HKD）</th></tr></thead><tbody>';
+  for(const it of rows){
+    const p = it?.p;
+    const v = it?.v;
+    html += `<tr><td class="mono">${esc(p)}</td><td class="mono">${esc(fmtNum(v,3))}</td></tr>`;
   }
-
-  function fmtNum(x){
-    if (x === null || x === undefined || x === '') return '—';
-    const n = Number(x);
-    if (!Number.isFinite(n)) return String(x);
-    // 不强行加货币符号，保持中性、可审计
-    return n.toLocaleString('zh-CN', { maximumFractionDigits: 4 });
+  if(rows.length===0){
+    html += `<tr><td colspan="2" class="muted">暂无数据</td></tr>`;
   }
+  html += '</tbody></table>';
+  return html;
+}
 
-  function safeText(node, text){
-    node.textContent = (text === null || text === undefined) ? '' : String(text);
+function tableLast5(arr){
+  const rows = Array.isArray(arr) ? arr : [];
+  let html = '<table><thead><tr>' +
+    '<th>预测日期</th><th>预测中位价（P50）</th><th>实际收盘价</th><th>误差</th><th>命中分位区间</th><th>判断结果</th><th>生成时间（BJT）</th>' +
+    '</tr></thead><tbody>';
+
+  for(const it of rows){
+    const predDate = it?.y_pred_trade_date ?? '—';
+    const p50 = it?.y_pred_p50;
+    const close = it?.today_close;
+    const err = it?.error;
+    const band = it?.hit_band ?? '—';
+    const judge = it?.judgment ?? '—';
+    const ts = it?.generated_at_bjt ?? '—';
+
+    const judgeClass = String(judge).includes('命中') ? 'ok' : 'bad';
+
+    html += `<tr>
+      <td>${esc(predDate)}</td>
+      <td class="mono">${esc(fmtNum(p50,3))}</td>
+      <td class="mono">${esc(fmtNum(close,3))}</td>
+      <td class="mono">${esc(fmtNum(err,3))}</td>
+      <td>${esc(band)}</td>
+      <td class="${judgeClass}">${esc(judge)}</td>
+      <td class="mono">${esc(ts)}</td>
+    </tr>`;
   }
-
-  function clearNode(node){
-    while (node.firstChild) node.removeChild(node.firstChild);
+  if(rows.length===0){
+    html += `<tr><td colspan="7" class="muted">暂无数据</td></tr>`;
   }
+  html += '</tbody></table>';
+  return html;
+}
 
-  function buildSummaryTable(data){
-    clearNode(summaryEl);
+async function loadReport(){
+  const meta = document.getElementById('meta');
+  const status = document.getElementById('status');
 
+  const m1 = document.getElementById('m1');
+  const m1_note = document.getElementById('m1_note');
+  const m2 = document.getElementById('m2');
+  const m3 = document.getElementById('m3');
+  const m4 = document.getElementById('m4');
+  const m5 = document.getElementById('m5');
+  const m6 = document.getElementById('m6');
+  const m7 = document.getElementById('m7');
+
+  try{
+    status.textContent = '状态：抓取中…';
+
+    // ✅ 打开即最新关键：禁用缓存 + URL 加时间戳
+    const url = 'latest_report.json?t=' + Date.now();
+    const r = await fetch(url, { cache: 'no-store' });
+    if(!r.ok) throw new Error('HTTP ' + r.status + ' ' + r.statusText);
+
+    const data = await r.json();
+
+    // 头部元信息
     const symbol = data.symbol || data.code || data.ticker || '02618.HK';
-    const tradeDate = data.trade_date || data.date || data.trading_date || '未知';
-    const genBjt = data.generated_at_bjt || data.generated_at || data.generatedAt || data.report_time || '—';
-    const reason = data.report_reason || data.reason || '—';
+    const date   = data.trade_date || data.date || data.tradeDate || data.trading_date || '未知';
+    const genBjt = data.generated_at_bjt || data.generated_at || data.generatedAt || '';
+    const pageTs = new Date().toISOString();
 
-    const m1 = data.module_1_market || {};
-    const open  = m1.open;
-    const high  = m1.high;
-    const low   = m1.low;
-    const close = m1.close;
-    const volume = m1.volume;
-    const turnover = m1.turnover || m1.amount;
+    meta.innerHTML = `
+      <div class="row">
+        <div class="badge">代码：${esc(symbol)}</div>
+        <div class="badge">时间：${esc(date)}</div>
+        <div class="badge">页面刷新：${esc(pageTs)}</div>
+      </div>
+      <div style="margin-top:8px">
+        数据源：/latest_report.json（no-store + 时间戳防缓存）
+        ${genBjt ? `｜报告生成时间：${esc(genBjt)}` : ``}
+      </div>
+    `;
 
-    const sourceUrl = m1.source_url || m1.source_uri || data.source_url || data.source_uri || '—';
-    const fetchedBjt = m1.fetched_at_bjt || data.fetched_at_bjt || '—';
+    // ① 当日实际交易数据
+    const mk = data.module_1_market || {};
+    const raw = mk.raw || {};
+    const src = mk.source_url || '';
+    const fetched = mk.fetched_at_bjt || '';
+    const reason = data.report_reason || data.reason || '';
 
-    const table = document.createElement('table');
-    const thead = document.createElement('thead');
-    const trh = document.createElement('tr');
-    ['字段', '值'].forEach(t => {
-      const th = document.createElement('th');
-      th.textContent = t;
-      trh.appendChild(th);
-    });
-    thead.appendChild(trh);
-    table.appendChild(thead);
+    m1.innerHTML = tableKV([
+      ['代码', esc(mk.symbol || symbol)],
+      ['交易日', esc(mk.trade_date || date)],
+      ['开盘价', `<span class="mono">${esc(fmtNum(mk.open,2))}</span>`],
+      ['最高价', `<span class="mono">${esc(fmtNum(mk.high,2))}</span>`],
+      ['最低价', `<span class="mono">${esc(fmtNum(mk.low,2))}</span>`],
+      ['收盘价', `<span class="mono">${esc(fmtNum(mk.close,2))}</span>`],
+      ['成交量', `<span class="mono">${esc(fmtInt(mk.volume))}</span>`],
+      ['成交额', `<span class="mono">${esc(fmtMoney(mk.turnover,2))}</span>`],
+    ]);
 
-    const tbody = document.createElement('tbody');
-    const rows = [
-      ['代码', symbol],
-      ['交易日', tradeDate],
-      ['报告生成时间（BJT）', genBjt],
-      ['市场数据抓取时间（BJT）', fetchedBjt],
-      ['报告说明', reason],
-      ['开盘价', fmtNum(open)],
-      ['最高价', fmtNum(high)],
-      ['最低价', fmtNum(low)],
-      ['收盘价', fmtNum(close)],
-      ['成交量', fmtNum(volume)],
-      ['成交额', fmtNum(turnover)],
-      ['数据来源 URL', sourceUrl],
-    ];
-
-    rows.forEach(([k, v]) => {
-      const tr = document.createElement('tr');
-      const td1 = document.createElement('td'); td1.textContent = k;
-      const td2 = document.createElement('td');
-
-      // URL 这种字段：如果看起来像 http，就做成可点击链接；否则纯文本
-      if (typeof v === 'string' && /^https?:\/\//i.test(v)) {
-        const a = document.createElement('a');
-        a.href = v;
-        a.target = '_blank';
-        a.rel = 'noopener noreferrer';
-        a.textContent = v;
-        td2.appendChild(a);
-      } else {
-        td2.textContent = (v === null || v === undefined || v === '') ? '—' : String(v);
-      }
-
-      tr.appendChild(td1);
-      tr.appendChild(td2);
-      tbody.appendChild(tr);
-    });
-
-    table.appendChild(tbody);
-    summaryEl.appendChild(table);
-  }
-
-  async function fetchWithTimeout(url, timeoutMs){
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), timeoutMs);
-
-    try{
-      const res = await fetch(url, {
-        cache: 'no-store',
-        signal: ctrl.signal,
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        }
-      });
-      return res;
-    } finally {
-      clearTimeout(t);
-    }
-  }
-
-  async function loadReport(){
-    setStatus('状态：抓取中…', 'warn');
-    meta2El.textContent = '页面刷新：' + isoNow();
-
-    // ✅ 核心：时间戳防缓存
-    const url = `${REPORT_PATH}?t=${Date.now()}`;
-    rawLinkEl.href = REPORT_PATH; // 这里不加时间戳，方便审计与对外分享固定链接
-
-    let lastErr = null;
-
-    for (let i=0; i<RETRY_MAX; i++){
-      try{
-        if (i > 0) {
-          setStatus(`状态：重试中…（${i}/${RETRY_MAX-1}）`, 'warn');
-          await new Promise(r => setTimeout(r, RETRY_GAP_MS));
-        }
-
-        const res = await fetchWithTimeout(url, TIMEOUT_MS);
-        if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
-
-        const text = await res.text();
-        sizeEl.textContent = '大小：' + new Blob([text]).size.toLocaleString('zh-CN') + ' bytes';
-
-        // 解析 JSON（稳妥：先 text，再 JSON.parse，能更好报错）
-        let data;
-        try{
-          data = JSON.parse(text);
-        }catch(e){
-          throw new Error('JSON 解析失败：' + e.message);
-        }
-
-        // 摘要表
-        buildSummaryTable(data);
-
-        // 原始 JSON（安全：textContent）
-        outEl.textContent = JSON.stringify(data, null, 2);
-
-        setStatus('状态：已更新', 'ok');
-        return; // 成功就结束
-      }catch(e){
-        lastErr = e;
-      }
-    }
-
-    // 全部失败
-    setStatus('状态：失败', 'err');
-    clearNode(summaryEl);
-
-    const p = document.createElement('div');
-    p.className = 'meta err';
-    p.textContent = '加载失败：' + (lastErr ? lastErr.message : '未知错误');
-    summaryEl.appendChild(p);
-
-    outEl.textContent = '';
-  }
-
-  function setAuto(on){
-    if (on){
-      if (autoTimer) return;
-      autoTimer = setInterval(loadReport, AUTO_REFRESH_MS);
-      btnAuto.textContent = '自动刷新：开（1分钟）';
-      setStatus('状态：自动刷新已开启', 'ok');
-    } else {
-      if (autoTimer){
-        clearInterval(autoTimer);
-        autoTimer = null;
-      }
-      btnAuto.textContent = '自动刷新：关';
-    }
-  }
-
-  // 按钮
-  btnRefresh.addEventListener('click', loadReport);
-  btnAuto.addEventListener('click', () => setAuto(!autoTimer));
-
-  // ✅ 打开即最新
-  loadReport();
-})();
-</script>
-</body>
-</html>
+    m1_note.innerHTML = `
+      <div class="hr"></div>
+      <div class="note">
+        备注：数据抓取时间（BJT）= <span class="mono">${esc(fetched || '—')}</span><br/>
+        备注：数据源链接 = <span class="mono">${esc(src || '—')}</span><br/>
+        备注：系统说明 = ${esc(reason || '—')} 
