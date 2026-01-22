@@ -318,6 +318,7 @@ const FIELD_ZH = {
 
 function label(k){ return FIELD_ZH[k] || k; }
 
+/** ✅ 标准 HTML 转义（避免二次转义问题） */
 function escapeHtml(s){
   return String(s)
     .replaceAll('&','&amp;')
@@ -506,7 +507,9 @@ function renderHitReviewLikeShot2(arr){
   }
 
   const toNum = (x) => (typeof x === 'number' ? x : (x == null ? null : Number(x)));
-  const fmt2 = (x) => (typeof x === 'number' && Number.isFinite(x)) ? x.toFixed(3).replace(/0+$/,'').replace(/\.$/,'') : (x == null ? '' : String(x));
+  const fmt = (x) => (typeof x === 'number' && Number.isFinite(x))
+    ? x.toFixed(3).replace(/0+$/,'').replace(/\.$/,'')
+    : (x == null ? '' : String(x));
 
   const rows = arr.map(r=>{
     const predDate   = r?.pred_ref_date ?? r?.eval_date ?? '';
@@ -524,9 +527,9 @@ function renderHitReviewLikeShot2(arr){
     return `<tr>
       <td>${escapeHtml(predDate)}</td>
       <td>${escapeHtml(actualDate)}</td>
-      <td>${escapeHtml(fmt2(p50))}</td>
-      <td>${escapeHtml(fmt2(actual))}</td>
-      <td>${escapeHtml(fmt2(err))}</td>
+      <td>${escapeHtml(fmt(p50))}</td>
+      <td>${escapeHtml(fmt(actual))}</td>
+      <td>${escapeHtml(fmt(err))}</td>
       <td>${escapeHtml(hitBand)}</td>
       <td>${escapeHtml(judge)}</td>
     </tr>`;
@@ -597,7 +600,7 @@ function renderReport(d){
     ]
   });
 
-  // ✅ ⑦：按截图2的结构渲染（替换掉原先“截图1”的大表）
+  // ✅ ⑦：按截图2的结构渲染
   $('m7c').innerHTML = renderHitReviewLikeShot2(d.module_7_last5_hit);
 }
 
