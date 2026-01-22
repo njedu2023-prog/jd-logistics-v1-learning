@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>京东物流 V1.0 法定预测报告</title>
+  <title>京东物流 V1.0 报告</title>
   <style>
     :root{
       --bg:#f6f7f9;
@@ -12,6 +12,10 @@
       --muted:#667085;
       --line:#e6e8eb;
       --shadow:0 1px 2px rgba(0,0,0,.04);
+
+      /* 你要求：标题 14，内容 12 */
+      --fs-title:14px;
+      --fs-body:12px;
     }
     *{box-sizing:border-box}
     body{
@@ -19,6 +23,8 @@
       background:var(--bg);
       color:var(--text);
       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",Arial,sans-serif;
+      font-size:var(--fs-body);
+      line-height:1.6;
     }
     .wrap{max-width:1480px;margin:0 auto}
     .card{
@@ -29,90 +35,106 @@
       margin:14px 0;
       box-shadow:var(--shadow);
     }
+
+    /* 主标题：14px */
     h1{
-      font-size:32px;
-      line-height:1.2;
-      margin:0 0 14px 0;
+      font-size:var(--fs-title);
+      line-height:1.4;
+      margin:0 0 12px 0;
       font-weight:800;
       letter-spacing:.2px;
     }
+
+    /* 顶部元信息（内容 12px） */
     .meta{
       margin:0;
       padding-left:0;
       list-style:none;
       color:var(--text);
-      font-size:20px;
+      font-size:var(--fs-body);
       line-height:1.8;
     }
     .meta .k{font-weight:800;display:inline-block;min-width:140px}
     .meta .v{font-weight:600}
     .muted{color:var(--muted);font-weight:500}
     .hr{height:1px;background:var(--line);margin:14px 0}
+
+    /* 模块标题：14px */
     .secTitle{
-      font-size:26px;
+      font-size:var(--fs-title);
       font-weight:900;
       margin:0 0 10px 0;
       letter-spacing:.2px;
     }
 
+    /* 表格：表头=标题14px；内容=12px */
     table{
       width:100%;
       border-collapse:collapse;
       margin-top:8px;
-      font-size:22px;
+      font-size:var(--fs-body);
     }
     thead th{
       text-align:left;
       font-weight:900;
-      padding:16px 12px;
+      padding:10px 10px;
       border-bottom:2px solid var(--line);
+      font-size:var(--fs-title);
     }
     tbody td{
-      padding:18px 12px;
+      padding:10px 10px;
       border-bottom:1px solid var(--line);
       vertical-align:middle;
       font-weight:600;
+      font-size:var(--fs-body);
     }
     .twoCol thead th:nth-child(2),
     .twoCol tbody td:nth-child(2){
       text-align:left;
     }
 
+    /* 注释：内容 12px */
     .smallNote{
       color:var(--muted);
-      font-size:16px;
+      font-size:var(--fs-body);
       line-height:1.6;
       margin-top:10px;
       font-weight:500;
     }
 
+    /* 状态行：内容 12px */
     .statusLine{
       display:flex;
       gap:10px;
       align-items:center;
-      margin-top:6px;
+      margin-top:8px;
       color:var(--muted);
-      font-size:14px;
+      font-size:var(--fs-body);
+      flex-wrap:wrap;
     }
+
+    /* 文字标签（无图标） */
     .pill{
       display:inline-block;
-      padding:3px 10px;
+      padding:2px 10px;
       border:1px solid var(--line);
       border-radius:999px;
-      font-size:13px;
+      font-size:var(--fs-body);
       color:#344054;
       background:#fff;
       font-weight:700;
+      line-height:1.6;
     }
+
     .error{
       color:#b42318;
       font-weight:800;
-      font-size:14px;
+      font-size:var(--fs-body);
     }
     .ok{
       color:#027a48;
       font-weight:800;
-      font-size:14px;
+      font-size:var(--fs-body);
     }
   </style>
 </head>
@@ -246,7 +268,6 @@
   }
 
   function getAny(obj, paths){
-    // paths: ["a.b.c","x.y","k"]
     for (const p of paths){
       const parts = p.split(".");
       let cur = obj;
@@ -264,7 +285,6 @@
   }
 
   function setKVTable(tbodyEl, rows){
-    // rows: [{k:"字段", v:"值"}]
     tbodyEl.innerHTML = rows.map(r => `
       <tr>
         <td>${r.k}</td>
@@ -274,7 +294,6 @@
   }
 
   function setQuantTable(tbodyEl, q){
-    // q can be object: {P05:..., P25:..., P50:..., P75:..., P95:...}
     const order = ["P05","P25","P50","P75","P95"];
     const rows = order.map(k => ({
       q: k,
@@ -302,7 +321,7 @@
     if (!Array.isArray(arr) || arr.length === 0){
       tbodyEl.innerHTML = `
         <tr>
-          <td colspan="7" class="muted" style="padding:18px 12px;">--</td>
+          <td colspan="7" class="muted" style="padding:10px 10px;">--</td>
         </tr>`;
       return;
     }
@@ -351,14 +370,15 @@
       markPill("pill_fetch", true, "DATA: OK");
     }catch(e){
       markPill("pill_fetch", false, "DATA: FAIL");
-      byId("note_msg").innerHTML = `<span class="error">数据拉取失败：</span>${fmt(e && e.message)}<br><span class="muted">请检查 Raw JSON 是否可访问、文件是否为有效 JSON。</span>`;
+      byId("note_msg").innerHTML =
+        `<span class="error">数据拉取失败：</span>${fmt(e && e.message)}<br>` +
+        `<span class="muted">请检查 Raw JSON 是否可访问、文件是否为有效 JSON。</span>`;
       byId("last_update").textContent = "Last update: --";
       return;
     }
 
     // 解析阶段
     try{
-      // 顶部元信息（多路径兼容）
       const symbol = getAny(data, ["symbol","code","ticker","meta.symbol"]);
       const tradeDate = getAny(data, ["trade_date","date","trading_day","meta.trade_date"]);
       const reportTime = getAny(data, ["report_time_bjt","generated_time_bjt","report_time","meta.report_time_bjt","run_time_bjt"]);
@@ -406,7 +426,7 @@
       setQuantTable(byId("tbl_m1"), m1);
       setQuantTable(byId("tbl_m6"), m6);
 
-      // ⑥ 模型状态与学习更新（按你截图那种三列）
+      // ⑥ 模型状态与学习更新
       const st = getAny(data, ["model_status","status","meta","model","data.status"]) || {};
       const factors = getAny(data, ["factors","constraints","switches","flags"]) || {};
       const learning = getAny(data, ["learning","learn","self_learning"]) || {};
@@ -441,7 +461,7 @@
       ];
       setStatusRows(byId("tbl_status"), statusRows);
 
-      // ⑦ 过去五日
+      // ⑦ 过去五个交易日
       const last5 = getAny(data, ["last_5","past_5","history_5","recent5","hit_review_5"]) || [];
       setLast5(byId("tbl_last5"), last5);
 
@@ -457,7 +477,6 @@
     try{
       markPill("pill_render", true, "RENDER: OK");
       byId("last_update").textContent = "Last update: " + new Date().toISOString();
-      // 可选说明
       byId("note_msg").textContent = "说明：页面打开即拉取最新数据；若字段缺失显示 “--”。";
     }catch(e){
       markPill("pill_render", false, "RENDER: FAIL");
