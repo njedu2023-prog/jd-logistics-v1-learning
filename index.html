@@ -258,7 +258,6 @@ const UI = {
 
 /* =========================================================
  *  3) 字段中文映射（找不到就回退原字段名）
- *  你新增 JSON 字段时，优先在这里补一条翻译
  * ========================================================= */
 const FIELD_ZH = {
   // 顶部/模块①
@@ -267,9 +266,17 @@ const FIELD_ZH = {
   high: '最高价',
   low: '最低价',
   close: '收盘价',
-  volume: '成交量',
-  amount_yi_hkd: '成交额（亿港元）',
-  amount: '成交额',
+
+  // ✅ 修复：成交量显示单位
+  volume: '成交量（股）',
+
+  // ✅ 修复：成交额显示“港元亿”
+  amount_yi_hkd: '成交额（港元亿）',
+
+  // 兼容字段：有的源用 amount/turnover
+  amount: '成交额（港元）',
+  turnover: '成交额（港元）',
+
   source: '数据来源',
   source_url: '数据源地址',
   fetched_at_bjt: '抓取时间（北京时间）',
@@ -350,10 +357,9 @@ const FIELD_ZH = {
 function label(key){ return FIELD_ZH[key] || key; }
 
 /* =========================================================
- *  4) 工具函数区（尽量无业务含义，方便复用）
+ *  4) 工具函数区
  * ========================================================= */
 
-/** HTML 转义：防止 JSON 文本插入页面导致 XSS 或结构错乱 */
 function escapeHtml(input){
   return String(input)
     .replaceAll('&','&amp;')
@@ -367,18 +373,20 @@ function isFiniteNumber(x){
   return typeof x === 'number' && Number.isFinite(x);
 }
 
-/** 数字格式化：去掉尾随 0（用于显示更干净） */
 function fmtFixedTrim(x, digits){
   if(!isFiniteNumber(x)) return (x == null ? '' : String(x));
   return x.toFixed(digits).replace(/0+$/,'').replace(/\.$/,'');
 }
 
-/** 按字段名做更符合业务的显示格式 */
+/** ✅ 数字格式化：按字段做业务展示 */
 function fmtValueByKey(v, k){
-  if(!isFiniteNumber(v)) return String(v);
+  if(!isFiniteNumber(v)) return (v == null ? '' : String(v));
 
-  // 成交量通常显示整数 + 千分位
+  // 成交量：整数 + 千分位
   if(k === 'volume') return Math.round(v).toLocaleString('zh-CN');
+
+  // 成交额（港元亿）：保留 4 位去尾零
+  if(k === 'amount_yi_hkd') return fmtFixedTrim(v, 4);
 
   // 分位点 p 保留 2 位
   if(k === 'p') return fmtFixedTrim(v, 2);
@@ -391,7 +399,6 @@ function fmtValueByKey(v, k){
   return fmtFixedTrim(v, 2);
 }
 
-/** 尝试把字符串解析为 JSON 对象（用于 safety_limits / limits 可能是字符串的情况） */
 function tryParseJsonObject(str){
   if(typeof str !== 'string') return null;
   const s = str.trim();
@@ -404,14 +411,11 @@ function tryParseJsonObject(str){
   }
 }
 
-/** 交易日判断：这里只按“周六/周日”判断（轻量版），不引入港股节假日表 */
 function isNonTradingDayBJT(dateStr){
   let dt;
   if(dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)){
-    // 强制按 +08:00 解析为北京时间零点
     dt = new Date(dateStr + 'T00:00:00+08:00');
   }else{
-    // 未给日期时：以当前北京时间判断
     const now = new Date();
     const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
     dt = new Date(utcMs + 8 * 3600000);
@@ -420,7 +424,6 @@ function isNonTradingDayBJT(dateStr){
   return (day === 0 || day === 6);
 }
 
-/** 顶部状态胶囊（pill）写入：用于 DATA/PARSE/RENDER 三个状态 */
 function markPill(el, ok, text){
   if(!el) return;
   el.textContent = text;
@@ -428,24 +431,26 @@ function markPill(el, ok, text){
   el.style.color = ok ? "#027a48" : "#b42318";
 }
 
-/** 常用占位 HTML */
 function smallEmpty(text='暂无数据'){
   return `<div class="small">${escapeHtml(text)}</div>`;
+}
+
+/* ✅ 把对象安全地显示成 JSON（避免 [object Object]） */
+function prettyJson(obj){
+  try{
+    return JSON.stringify(obj, null, 2);
+  }catch(_e){
+    return String(obj);
+  }
 }
 
 /* =========================================================
  *  5) 表格渲染：KV 表 & 数组表
  * ========================================================= */
 
-/**
- * renderScalar：把任意值渲染成表格单元格 HTML
- * - boolean / "true|false" -> 是/否
- * - safety_limits / limits -> 展开成 KV 表
- * - run_id / last_run_id -> 等宽字体+可换行
- * - 数字 -> fmtValueByKey
- */
 function renderScalar(v, k){
-  if(v == null) return '';
+  // ✅ 修复：无值不留空，显示“—”
+  if(v == null) return `<span class="small">—</span>`;
 
   // 布尔值：显示“是/否”
   if(typeof v === 'boolean'){
@@ -471,27 +476,24 @@ function renderScalar(v, k){
 
   // 运行ID：等宽 + 自动换行
   if(k === 'run_id' || k === 'last_run_id'){
-    return v ? `<span class="mono mono-wrap">${escapeHtml(String(v))}</span>` : '';
+    return v ? `<span class="mono mono-wrap">${escapeHtml(String(v))}</span>` : `<span class="small">—</span>`;
   }
 
-  // 普通值
+  // ✅ 对普通对象：用 JSON 展示（避免 [object Object]）
+  if(typeof v === 'object' && !Array.isArray(v)){
+    return `<pre class="mono mono-wrap" style="margin:0;white-space:pre-wrap;">${escapeHtml(prettyJson(v))}</pre>`;
+  }
+
   const s = isFiniteNumber(v) ? fmtValueByKey(v, k) : String(v);
   return `<span class="num">${escapeHtml(s)}</span>`;
 }
 
-/**
- * kvTable：把对象渲染成两列表格（字段/当前值）
- * options:
- * - excludeKeys: 不展示的 key
- * - preferredOrder: 优先展示的 key 顺序（其余按原顺序跟在后面）
- */
 function kvTable(obj, emptyHint, options={}){
   if(!obj || Object.keys(obj).length === 0) return smallEmpty(emptyHint || '暂无可用数据');
 
   const exclude = new Set(options.excludeKeys || []);
   const allKeys = Object.keys(obj).filter(k => !exclude.has(k));
 
-  // preferredOrder 提前
   let keys = allKeys;
   const preferred = (options.preferredOrder || []).filter(k => allKeys.includes(k));
   if(preferred.length){
@@ -516,11 +518,6 @@ function kvTable(obj, emptyHint, options={}){
   `;
 }
 
-/**
- * arrayTable：把数组对象渲染成表格（用于分布预测等）
- * - 自动汇总所有 key 作为列
- * - 支持 preferredOrder / excludeKeys
- */
 function arrayTable(arr, options={}){
   if(!Array.isArray(arr) || arr.length === 0) return smallEmpty('暂无数据');
 
@@ -551,9 +548,12 @@ function buildFallbackReport(market){
   const symbol = market?.symbol || market?.ticker || CONFIG.DEFAULT_SYMBOL;
   const trade_date = market?.trade_date || market?.date || '未知';
 
-  // amount（港元） -> amount_yi_hkd（亿港元）
-  const amount = isFiniteNumber(market?.amount) ? market.amount : null;
-  const amount_yi_hkd = isFiniteNumber(amount) ? (amount / 1e8) : null;
+  // amount（港元）/turnover（港元） -> amount_yi_hkd（港元亿）
+  const amountHKD =
+    (isFiniteNumber(market?.amount) ? market.amount : null) ??
+    (isFiniteNumber(market?.turnover) ? market.turnover : null);
+
+  const amount_yi_hkd = isFiniteNumber(amountHKD) ? (amountHKD / 1e8) : null;
 
   return {
     status: 'PLACEHOLDER',
@@ -584,10 +584,9 @@ function buildFallbackReport(market){
 }
 
 /* =========================================================
- *  7) 模块② / 模块⑦：按“截图2结构”渲染（保留你的原逻辑）
+ *  7) 模块② / 模块⑦：按“截图2结构”渲染
  * ========================================================= */
 
-/** 模块②：6 行 KV 结构 */
 function renderYesterdayReviewLikeShot2(obj){
   if(!obj || (typeof obj === 'object' && !Array.isArray(obj) && Object.keys(obj).length === 0)){
     return smallEmpty('暂无数据');
@@ -595,7 +594,6 @@ function renderYesterdayReviewLikeShot2(obj){
 
   const toNum = (x) => (typeof x === 'number' ? x : (x == null ? null : Number(x)));
 
-  // 兼容多种字段命名（以你的 JSON 为准自动匹配）
   const p50 = toNum(
     obj?.pred_median_p50 ??
     obj?.pred_p50 ??
@@ -611,7 +609,6 @@ function renderYesterdayReviewLikeShot2(obj){
     obj?.close
   );
 
-  // 误差：优先 obj.error / obj.err / obj.abs_error，否则用 实际-预测
   let err = toNum(obj?.error ?? obj?.err ?? obj?.abs_error);
   if(err == null && p50 != null && actual != null) err = actual - p50;
 
@@ -626,17 +623,19 @@ function renderYesterdayReviewLikeShot2(obj){
     obj?.eval_date ??
     '';
 
+  const show = (x) => (x == null || x === '' ? '—' : String(x));
+
   const rows = [
-    ['昨日预测中位价(P50)', fmtFixedTrim(p50, 3)],
-    ['今日实际收盘价', fmtFixedTrim(actual, 3)],
-    ['误差(实际-预测)', fmtFixedTrim(err, 3)],
-    ['命中分位区间', hit],
-    ['判断结果', judge],
-    ['回顾基于预测日期', basePredDate],
+    ['昨日预测中位价(P50)', show(p50 == null ? null : fmtFixedTrim(p50, 3))],
+    ['今日实际收盘价', show(actual == null ? null : fmtFixedTrim(actual, 3))],
+    ['误差(实际-预测)', show(err == null ? null : fmtFixedTrim(err, 3))],
+    ['命中分位区间', show(hit)],
+    ['判断结果', show(judge)],
+    ['回顾基于预测日期', show(basePredDate)],
   ].map(([k, v]) => `
     <tr>
       <td class="k">${escapeHtml(k)}</td>
-      <td>${escapeHtml(v == null ? '' : String(v))}</td>
+      <td>${escapeHtml(v)}</td>
     </tr>
   `).join('');
 
@@ -648,13 +647,13 @@ function renderYesterdayReviewLikeShot2(obj){
   `;
 }
 
-/** 模块⑦：7 列结构 */
 function renderHitReviewLikeShot2(arr){
   if(!Array.isArray(arr) || arr.length === 0){
     return smallEmpty('暂无数据');
   }
 
   const toNum = (x) => (typeof x === 'number' ? x : (x == null ? null : Number(x)));
+  const show = (x) => (x == null || x === '' ? '—' : String(x));
 
   const rows = arr.map(r => {
     const predDate   = r?.pred_ref_date ?? r?.eval_date ?? '';
@@ -662,7 +661,6 @@ function renderHitReviewLikeShot2(arr){
     const p50        = toNum(r?.pred_median_t1);
     const actual     = toNum(r?.actual_close);
 
-    // 误差：优先 abs_error，否则用 实际-预测P50
     let err = toNum(r?.abs_error);
     if(err == null && p50 != null && actual != null) err = actual - p50;
 
@@ -670,13 +668,13 @@ function renderHitReviewLikeShot2(arr){
     const judge   = r?.judge ?? '';
 
     return `<tr>
-      <td>${escapeHtml(predDate)}</td>
-      <td>${escapeHtml(actualDate)}</td>
-      <td>${escapeHtml(fmtFixedTrim(p50, 3))}</td>
-      <td>${escapeHtml(fmtFixedTrim(actual, 3))}</td>
-      <td>${escapeHtml(fmtFixedTrim(err, 3))}</td>
-      <td>${escapeHtml(hitBand)}</td>
-      <td>${escapeHtml(judge)}</td>
+      <td>${escapeHtml(show(predDate))}</td>
+      <td>${escapeHtml(show(actualDate))}</td>
+      <td>${escapeHtml(show(p50 == null ? null : fmtFixedTrim(p50, 3)))}</td>
+      <td>${escapeHtml(show(actual == null ? null : fmtFixedTrim(actual, 3)))}</td>
+      <td>${escapeHtml(show(err == null ? null : fmtFixedTrim(err, 3)))}</td>
+      <td>${escapeHtml(show(hitBand))}</td>
+      <td>${escapeHtml(show(judge))}</td>
     </tr>`;
   }).join('');
 
@@ -703,13 +701,50 @@ function renderHitReviewLikeShot2(arr){
 /* =========================================================
  *  8) 主渲染：把 report JSON 写入 ①~⑦
  * ========================================================= */
+
+/** ✅ 模块①字段标准化：把 turnover/amount 折叠为 amount_yi_hkd */
+function normalizeModule1Market(m){
+  const src = (m && typeof m === 'object') ? m : {};
+  const out = { ...src };
+
+  // 统一成交额（港元亿）
+  if(!isFiniteNumber(out.amount_yi_hkd)){
+    const amountHKD =
+      (isFiniteNumber(out.turnover) ? out.turnover : null) ??
+      (isFiniteNumber(out.amount) ? out.amount : null);
+    if(isFiniteNumber(amountHKD)){
+      out.amount_yi_hkd = amountHKD / 1e8;
+    }
+  }
+
+  return out;
+}
+
 function renderReport(d){
-  // 顶部 meta：这里是页面“最重要摘要”
   UI.metaLine().textContent =
     `股票代码：${d.symbol || CONFIG.DEFAULT_SYMBOL} ｜ 交易日期：${d.trade_date || '未知'} ｜ 报告生成时间：${d.generated_at_bjt || '未知'}`;
 
   // ① 当日实际交易数据（KV 表）
-  UI.m1().innerHTML = kvTable(d.module_1_market, '当日无真实交易数据（合规占位）');
+  const m1 = normalizeModule1Market(d.module_1_market);
+
+  UI.m1().innerHTML = kvTable(m1, '当日无真实交易数据（合规占位）', {
+    // ✅ 不展示 raw；turnover/amount 已折叠到 amount_yi_hkd
+    excludeKeys: ['raw','turnover','amount'],
+    // ✅ 关键字段排序更贴合阅读
+    preferredOrder: [
+      'symbol',
+      'trade_date',
+      'open',
+      'high',
+      'low',
+      'close',
+      'volume',
+      'amount_yi_hkd',
+      'source_url',
+      'fetched_at_bjt',
+      'raw_sha1'
+    ]
+  });
 
   // ③④⑤ 价格分布（数组表）
   UI.m3().innerHTML = arrayTable(d.module_3_t1_distribution);
@@ -756,7 +791,6 @@ function renderReport(d){
  *  9) 数据加载：先主报告，失败则 fallback
  * ========================================================= */
 
-/** fetch JSON：加时间戳参数防缓存 */
 async function fetchJson(url){
   const u = url + (url.includes('?') ? '&' : '?') + '_=' + Date.now();
   const r = await fetch(u, { cache: 'no-store' });
@@ -764,15 +798,10 @@ async function fetchJson(url){
   return await r.json();
 }
 
-/**
- * 根据 status + 是否交易日，刷新顶部“状态标签/提示语”
- * 你如果未来想加更多状态：在这里改最集中
- */
 function applyTopStatus(d){
   const ok = d.status === 'SUCCESS';
   const nonTrading = isNonTradingDayBJT(d.trade_date);
 
-  // 先清理为默认样式
   UI.hint().textContent = '';
   UI.topCard().className = 'card';
   UI.statusTag().className = 'tag';
@@ -784,7 +813,6 @@ function applyTopStatus(d){
     return;
   }
 
-  // 非 SUCCESS：PLACEHOLDER / FAIL / 其它
   UI.topCard().className = 'card bad';
 
   if(nonTrading){
@@ -800,7 +828,6 @@ function applyTopStatus(d){
   UI.hint().textContent = d.report_reason || '当日数据暂不可用，系统已输出合规占位界面。';
 }
 
-/** 当两个数据源都不可用时：输出“合规占位界面” */
 function renderAllEmptyByFatal(nonTrading){
   UI.topCard().className = 'card bad';
 
@@ -830,19 +857,16 @@ function renderAllEmptyByFatal(nonTrading){
  *  10) 主流程：load -> parse -> render
  * ========================================================= */
 async function loadAndRender(){
-  // 初始状态：正在加载
   markPill(UI.pillFetch(), true, 'DATA: LOADING');
   markPill(UI.pillParse(), true, 'PARSE: --');
   markPill(UI.pillRender(), true, 'RENDER: --');
 
   try{
-    // 1) 先读法定报告
     let data;
     try{
       data = await fetchJson(CONFIG.REPORT_URL);
       markPill(UI.pillFetch(), true, 'DATA: OK');
     }catch(_e1){
-      // 2) 法定报告失败 -> 读兜底行情
       const mk = await fetchJson(CONFIG.FALLBACK_URL);
       data = buildFallbackReport(mk);
       markPill(UI.pillFetch(), false, 'DATA: FALLBACK');
@@ -850,10 +874,8 @@ async function loadAndRender(){
       UI.topCard().className = 'card bad';
     }
 
-    // 顶部状态标签（报告有效/非交易日/占位输出/数据未就绪）
     applyTopStatus(data);
 
-    // 解析 & 渲染
     try{
       renderReport(data);
       markPill(UI.pillParse(), true, 'PARSE: OK');
@@ -861,15 +883,13 @@ async function loadAndRender(){
       markPill(UI.pillParse(), false, 'PARSE: FAIL');
       UI.hint().textContent = '数据解析失败：' + (e?.message || '未知错误');
       UI.topCard().className = 'card bad';
-      return; // 解析失败就不继续写渲染状态
+      return;
     }
 
-    // 渲染完成
     markPill(UI.pillRender(), true, 'RENDER: OK');
     UI.lastUpdate().textContent = 'Last update: ' + new Date().toISOString();
 
   }catch(_fatal){
-    // 两个都失败：输出合规占位
     markPill(UI.pillFetch(), false, 'DATA: FAIL');
     markPill(UI.pillParse(), false, 'PARSE: --');
     markPill(UI.pillRender(), false, 'RENDER: --');
