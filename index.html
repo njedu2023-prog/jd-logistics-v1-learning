@@ -14,7 +14,7 @@
       --line:#e6e8eb;
       --shadow:0 1px 2px rgba(0,0,0,.04);
 
-      /* 标题 14 / 内容 12 */
+      /* 字号：标题 14 / 内容 12 */
       --fs-title:14px;
       --fs-body:12px;
 
@@ -204,6 +204,8 @@
   <div class="card"><h2>② 昨日预测回顾</h2><div id="m2c"></div></div>
 
   <div class="card"><h2>⑥ 模型状态与学习更新</h2><div id="m6c"></div></div>
+
+  <!-- ✅ 模块⑦：按“截图2”的表头与数据结构渲染 -->
   <div class="card"><h2>⑦ 过去五个交易日预测命中回顾</h2><div id="m7c"></div></div>
 
   <div class="card">
@@ -217,16 +219,46 @@
 </div>
 
 <script>
-/** =========================
- *  配置（按你的仓库结构）
- *  ========================= */
-const REPORT_URL   = 'runs/latest_report.json';        // 主数据（法定报告）
-const FALLBACK_URL = 'jd-logistics-latest.json';       // 兜底行情（简版）
-const AUTO_REFRESH_MS = 60000;
+/* =========================================================
+ *  1) 配置区（你后续最常改的地方）
+ * ========================================================= */
+const CONFIG = {
+  // 主数据（法定报告）
+  REPORT_URL: 'runs/latest_report.json',
+  // 兜底行情（简版）
+  FALLBACK_URL: 'https://raw.githubusercontent.com/njedu2023-prog/JD-data/main/jd-logistics-latest.json',
+  // 自动刷新间隔（毫秒）
+  AUTO_REFRESH_MS: 60000,
+  // 默认股票代码（当 fallback 里也没有时使用）
+  DEFAULT_SYMBOL: '02618.HK'
+};
 
-const $ = id => document.getElementById(id);
+/* =========================================================
+ *  2) DOM 简化
+ * ========================================================= */
+const $ = (id) => document.getElementById(id);
 
-/** 字段中文映射：找不到就回退原字段名 */
+const UI = {
+  topCard: () => $('top'),
+  statusTag: () => $('statusTag'),
+  hint: () => $('hint'),
+  metaLine: () => $('metaLine'),
+  lastUpdate: () => $('last_update'),
+  pillFetch: () => $('pill_fetch'),
+  pillParse: () => $('pill_parse'),
+  pillRender: () => $('pill_render'),
+  m1: () => $('m1c'),
+  m2: () => $('m2c'),
+  m3: () => $('m3c'),
+  m4: () => $('m4c'),
+  m5: () => $('m5c'),
+  m6: () => $('m6c'),
+  m7: () => $('m7c')
+};
+
+/* =========================================================
+ *  3) 字段中文映射（找不到就回退原字段名）
+ * ========================================================= */
 const FIELD_ZH = {
   // 顶部/模块①
   trade_date: '交易日期',
@@ -234,9 +266,17 @@ const FIELD_ZH = {
   high: '最高价',
   low: '最低价',
   close: '收盘价',
-  volume: '成交量',
-  amount_yi_hkd: '成交额（亿港元）',
-  amount: '成交额',
+
+  // ✅ 修复：成交量显示单位
+  volume: '成交量（股）',
+
+  // ✅ 修复：成交额显示“港元亿”
+  amount_yi_hkd: '成交额（港元亿）',
+
+  // 兼容字段：有的源用 amount/turnover
+  amount: '成交额（港元）',
+  turnover: '成交额（港元）',
+
   source: '数据来源',
   source_url: '数据源地址',
   fetched_at_bjt: '抓取时间（北京时间）',
@@ -246,7 +286,7 @@ const FIELD_ZH = {
   p: '分位点（P）',
   v: '价格（HKD）',
 
-  // 模块②
+  // 模块②（保留兼容）
   pred_date: '预测日期',
   pred_close: '预测收盘价',
   reason: '说明',
@@ -298,7 +338,7 @@ const FIELD_ZH = {
   jump_sigma_min: '跳跃σ下限',
   jump_sigma_max: '跳跃σ上限',
 
-  // 模块⑦
+  // 模块⑦（保留原字段翻译）
   eval_date: '评估日期',
   target_trade_date: '目标交易日',
   actual_close: '实际收盘价',
@@ -314,10 +354,14 @@ const FIELD_ZH = {
   volume_percentile_20d: '近20日成交量分位'
 };
 
-function label(k){ return FIELD_ZH[k] || k; }
+function label(key){ return FIELD_ZH[key] || key; }
 
-function escapeHtml(s){
-  return String(s)
+/* =========================================================
+ *  4) 工具函数区
+ * ========================================================= */
+
+function escapeHtml(input){
+  return String(input)
     .replaceAll('&','&amp;')
     .replaceAll('<','&lt;')
     .replaceAll('>','&gt;')
@@ -325,15 +369,34 @@ function escapeHtml(s){
     .replaceAll("'","&#39;");
 }
 
-function isNumber(x){ return typeof x === 'number' && Number.isFinite(x); }
-function fmtNumber(n, digits=2){ return n.toFixed(digits); }
+function isFiniteNumber(x){
+  return typeof x === 'number' && Number.isFinite(x);
+}
 
+function fmtFixedTrim(x, digits){
+  if(!isFiniteNumber(x)) return (x == null ? '' : String(x));
+  return x.toFixed(digits).replace(/0+$/,'').replace(/\.$/,'');
+}
+
+/** ✅ 数字格式化：按字段做业务展示 */
 function fmtValueByKey(v, k){
-  if(!isNumber(v)) return String(v);
+  if(!isFiniteNumber(v)) return (v == null ? '' : String(v));
+
+  // 成交量：整数 + 千分位
   if(k === 'volume') return Math.round(v).toLocaleString('zh-CN');
-  if(k === 'p') return fmtNumber(v, 2);
-  if(String(k).toLowerCase().includes('rel_error') && String(k).toLowerCase().includes('pct')) return fmtNumber(v, 2);
-  return fmtNumber(v, 2);
+
+  // 成交额（港元亿）：保留 4 位去尾零
+  if(k === 'amount_yi_hkd') return fmtFixedTrim(v, 4);
+
+  // 分位点 p 保留 2 位
+  if(k === 'p') return fmtFixedTrim(v, 2);
+
+  // 相对误差百分比保留 2 位
+  const lk = String(k).toLowerCase();
+  if(lk.includes('rel_error') && lk.includes('pct')) return fmtFixedTrim(v, 2);
+
+  // 默认 2 位
+  return fmtFixedTrim(v, 2);
 }
 
 function tryParseJsonObject(str){
@@ -341,103 +404,11 @@ function tryParseJsonObject(str){
   const s = str.trim();
   if(!(s.startsWith('{') && s.endsWith('}'))) return null;
   try{
-    const o = JSON.parse(s);
-    return (o && typeof o === 'object' && !Array.isArray(o)) ? o : null;
-  }catch(e){
+    const obj = JSON.parse(s);
+    return (obj && typeof obj === 'object' && !Array.isArray(obj)) ? obj : null;
+  }catch(_e){
     return null;
   }
-}
-
-function renderScalar(v, k){
-  if(v == null) return '';
-
-  // 布尔值：显示“是/否”
-  if(typeof v === 'boolean'){
-    return `<span class="num">${v ? '是' : '否'}</span>`;
-  }
-  if(typeof v === 'string'){
-    const s = v.trim().toLowerCase();
-    if(s === 'true' || s === 'false'){
-      return `<span class="num">${s === 'true' ? '是' : '否'}</span>`;
-    }
-  }
-
-  // 安全边界：对象/可解析JSON字符串 -> 展开
-  if((k === 'safety_limits' || k === 'limits') && typeof v === 'string'){
-    const parsed = tryParseJsonObject(v);
-    if(parsed) return `<div class="scrollX">${kvTable(parsed)}</div>`;
-  }
-  if((k === 'safety_limits' || k === 'limits') && typeof v === 'object' && !Array.isArray(v)){
-    return `<div class="scrollX">${kvTable(v)}</div>`;
-  }
-
-  // 运行ID换行显示
-  if(k === 'run_id' || k === 'last_run_id'){
-    if(!v) return '';
-    return `<span class="mono mono-wrap">${escapeHtml(String(v))}</span>`;
-  }
-
-  const s = isNumber(v) ? fmtValueByKey(v, k) : String(v);
-  return `<span class="num">${escapeHtml(s)}</span>`;
-}
-
-/** KV 表：自动把 key 翻译成中文 + 表头（字段/当前值） */
-function kvTable(obj, emptyHint, options={}){
-  if(!obj || Object.keys(obj).length===0){
-    return `<div class="small">${emptyHint || '暂无可用数据'}</div>`;
-  }
-
-  const exclude = new Set(options.excludeKeys || []);
-  const allKeys = Object.keys(obj).filter(k => !exclude.has(k));
-
-  let keys = allKeys;
-  const preferred = (options.preferredOrder || []).filter(k => allKeys.includes(k));
-  if(preferred.length){
-    const rest = allKeys.filter(k => !preferred.includes(k));
-    keys = [...preferred, ...rest];
-  }
-
-  const rows = keys.map((k)=>{
-    const v = obj[k];
-    return `<tr ${(label(k)==='安全边界') ? 'id="safeBoundaryRow"' : ''}>
-      <td class="k">${escapeHtml(label(k))}</td>
-      <td>${renderScalar(v, k)}</td>
-    </tr>`;
-  }).join('');
-
-  return `
-    <table>
-      <thead><tr><th>字段</th><th>当前值</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-  `;
-}
-
-function arrayTable(arr, options={}){
-  if(!Array.isArray(arr) || arr.length===0){
-    return '<div class="small">暂无数据</div>';
-  }
-
-  const exclude = new Set(options.excludeKeys || []);
-  const allKeys = Array.from(new Set(arr.flatMap(x=>Object.keys(x||{})))).filter(k=>!exclude.has(k));
-
-  let keys = allKeys;
-  const preferred = (options.preferredOrder || []).filter(k=>allKeys.includes(k));
-  if(preferred.length){
-    const rest = allKeys.filter(k=>!preferred.includes(k));
-    keys = [...preferred, ...rest];
-  }
-
-  const head = keys.map(k=>`<th>${escapeHtml(label(k))}</th>`).join('');
-  const body = arr.map(x=>{
-    const tds = keys.map(k=>{
-      const v = x?.[k];
-      return `<td>${renderScalar(v, k)}</td>`;
-    }).join('');
-    return `<tr>${tds}</tr>`;
-  }).join('');
-
-  return `<div class="scrollX"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
 function isNonTradingDayBJT(dateStr){
@@ -453,21 +424,136 @@ function isNonTradingDayBJT(dateStr){
   return (day === 0 || day === 6);
 }
 
-function markPill(id, ok, text){
-  const el = $(id);
+function markPill(el, ok, text){
+  if(!el) return;
   el.textContent = text;
   el.style.borderColor = ok ? "#b7ebc6" : "#fda29b";
   el.style.color = ok ? "#027a48" : "#b42318";
 }
 
-/** 兜底：把简版行情 JSON 适配成模块①，其余模块置空（合规占位） */
+function smallEmpty(text='暂无数据'){
+  return `<div class="small">${escapeHtml(text)}</div>`;
+}
+
+/* ✅ 把对象安全地显示成 JSON（避免 [object Object]） */
+function prettyJson(obj){
+  try{
+    return JSON.stringify(obj, null, 2);
+  }catch(_e){
+    return String(obj);
+  }
+}
+
+/* =========================================================
+ *  5) 表格渲染：KV 表 & 数组表
+ * ========================================================= */
+
+function renderScalar(v, k){
+  // ✅ 修复：无值不留空，显示“—”
+  if(v == null) return `<span class="small">—</span>`;
+
+  // 布尔值：显示“是/否”
+  if(typeof v === 'boolean'){
+    return `<span class="num">${v ? '是' : '否'}</span>`;
+  }
+  if(typeof v === 'string'){
+    const s = v.trim().toLowerCase();
+    if(s === 'true' || s === 'false'){
+      return `<span class="num">${s === 'true' ? '是' : '否'}</span>`;
+    }
+  }
+
+  // 安全边界：对象/可解析 JSON 字符串 -> 展开
+  if((k === 'safety_limits' || k === 'limits')){
+    if(typeof v === 'string'){
+      const parsed = tryParseJsonObject(v);
+      if(parsed) return `<div class="scrollX">${kvTable(parsed)}</div>`;
+    }
+    if(typeof v === 'object' && !Array.isArray(v)){
+      return `<div class="scrollX">${kvTable(v)}</div>`;
+    }
+  }
+
+  // 运行ID：等宽 + 自动换行
+  if(k === 'run_id' || k === 'last_run_id'){
+    return v ? `<span class="mono mono-wrap">${escapeHtml(String(v))}</span>` : `<span class="small">—</span>`;
+  }
+
+  // ✅ 对普通对象：用 JSON 展示（避免 [object Object]）
+  if(typeof v === 'object' && !Array.isArray(v)){
+    return `<pre class="mono mono-wrap" style="margin:0;white-space:pre-wrap;">${escapeHtml(prettyJson(v))}</pre>`;
+  }
+
+  const s = isFiniteNumber(v) ? fmtValueByKey(v, k) : String(v);
+  return `<span class="num">${escapeHtml(s)}</span>`;
+}
+
+function kvTable(obj, emptyHint, options={}){
+  if(!obj || Object.keys(obj).length === 0) return smallEmpty(emptyHint || '暂无可用数据');
+
+  const exclude = new Set(options.excludeKeys || []);
+  const allKeys = Object.keys(obj).filter(k => !exclude.has(k));
+
+  let keys = allKeys;
+  const preferred = (options.preferredOrder || []).filter(k => allKeys.includes(k));
+  if(preferred.length){
+    const rest = allKeys.filter(k => !preferred.includes(k));
+    keys = [...preferred, ...rest];
+  }
+
+  const rows = keys.map((k) => {
+    const v = obj[k];
+    const isSafeRow = (label(k) === '安全边界');
+    return `<tr ${isSafeRow ? 'id="safeBoundaryRow"' : ''}>
+      <td class="k">${escapeHtml(label(k))}</td>
+      <td>${renderScalar(v, k)}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <table>
+      <thead><tr><th>字段</th><th>当前值</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+function arrayTable(arr, options={}){
+  if(!Array.isArray(arr) || arr.length === 0) return smallEmpty('暂无数据');
+
+  const exclude = new Set(options.excludeKeys || []);
+  const allKeys = Array.from(new Set(arr.flatMap(x => Object.keys(x || {}))))
+    .filter(k => !exclude.has(k));
+
+  let keys = allKeys;
+  const preferred = (options.preferredOrder || []).filter(k => allKeys.includes(k));
+  if(preferred.length){
+    const rest = allKeys.filter(k => !preferred.includes(k));
+    keys = [...preferred, ...rest];
+  }
+
+  const head = keys.map(k => `<th>${escapeHtml(label(k))}</th>`).join('');
+  const body = arr.map(row => {
+    const tds = keys.map(k => `<td>${renderScalar(row?.[k], k)}</td>`).join('');
+    return `<tr>${tds}</tr>`;
+  }).join('');
+
+  return `<div class="scrollX"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
+
+/* =========================================================
+ *  6) 业务适配：fallback 报告结构（合规占位）
+ * ========================================================= */
 function buildFallbackReport(market){
-  const symbol = market?.symbol || market?.ticker || '02618.HK';
+  const symbol = market?.symbol || market?.ticker || CONFIG.DEFAULT_SYMBOL;
   const trade_date = market?.trade_date || market?.date || '未知';
 
-  // amount（港元） -> amount_yi_hkd（亿港元）
-  const amount = isNumber(market?.amount) ? market.amount : null;
-  const amount_yi_hkd = isNumber(amount) ? (amount / 1e8) : null;
+  // amount（港元）/turnover（港元） -> amount_yi_hkd（港元亿）
+  const amountHKD =
+    (isFiniteNumber(market?.amount) ? market.amount : null) ??
+    (isFiniteNumber(market?.turnover) ? market.turnover : null);
+
+  const amount_yi_hkd = isFiniteNumber(amountHKD) ? (amountHKD / 1e8) : null;
 
   return {
     status: 'PLACEHOLDER',
@@ -485,7 +571,7 @@ function buildFallbackReport(market){
       volume: market?.volume ?? null,
       amount_yi_hkd: amount_yi_hkd ?? null,
       source: 'Fallback JSON',
-      source_url: FALLBACK_URL,
+      source_url: CONFIG.FALLBACK_URL,
       fetched_at_bjt: '—'
     },
     module_2_yesterday_review: {},
@@ -497,24 +583,179 @@ function buildFallbackReport(market){
   };
 }
 
+/* =========================================================
+ *  7) 模块② / 模块⑦：按“截图2结构”渲染
+ * ========================================================= */
+
+function renderYesterdayReviewLikeShot2(obj){
+  if(!obj || (typeof obj === 'object' && !Array.isArray(obj) && Object.keys(obj).length === 0)){
+    return smallEmpty('暂无数据');
+  }
+
+  const toNum = (x) => (typeof x === 'number' ? x : (x == null ? null : Number(x)));
+
+  const p50 = toNum(
+    obj?.pred_median_p50 ??
+    obj?.pred_p50 ??
+    obj?.pred_median ??
+    obj?.pred_close ??
+    obj?.yesterday_pred_p50 ??
+    obj?.p50
+  );
+
+  const actual = toNum(
+    obj?.today_actual_close ??
+    obj?.actual_close ??
+    obj?.close
+  );
+
+  let err = toNum(obj?.error ?? obj?.err ?? obj?.abs_error);
+  if(err == null && p50 != null && actual != null) err = actual - p50;
+
+  const hit = obj?.hit_bucket ?? obj?.hit_band ?? obj?.hit_range ?? obj?.hit_quantile ?? '';
+  const judge = obj?.judge ?? obj?.result ?? obj?.judgement ?? obj?.decision ?? '';
+
+  const basePredDate =
+    obj?.pred_ref_date ??
+    obj?.pred_date ??
+    obj?.review_base_pred_date ??
+    obj?.base_pred_date ??
+    obj?.eval_date ??
+    '';
+
+  const show = (x) => (x == null || x === '' ? '—' : String(x));
+
+  const rows = [
+    ['昨日预测中位价(P50)', show(p50 == null ? null : fmtFixedTrim(p50, 3))],
+    ['今日实际收盘价', show(actual == null ? null : fmtFixedTrim(actual, 3))],
+    ['误差(实际-预测)', show(err == null ? null : fmtFixedTrim(err, 3))],
+    ['命中分位区间', show(hit)],
+    ['判断结果', show(judge)],
+    ['回顾基于预测日期', show(basePredDate)],
+  ].map(([k, v]) => `
+    <tr>
+      <td class="k">${escapeHtml(k)}</td>
+      <td>${escapeHtml(v)}</td>
+    </tr>
+  `).join('');
+
+  return `
+    <table>
+      <thead><tr><th>字段</th><th>数值</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+/* ✅✅✅ 只改这里：模块⑦表头全中文 + 按你截图字段取值（8列） */
+function renderHitReviewLikeShot2(arr){
+  if(!Array.isArray(arr) || arr.length === 0){
+    return smallEmpty('暂无数据');
+  }
+
+  const show = (x) => (x == null || x === '' ? '—' : String(x));
+
+  const rows = arr.map(r => {
+    const predDate   = r?.y_pred_trade_date ?? '—';
+    const actualDate = r?.today_trade_date ?? '—';
+    const p50        = r?.y_pred_p50 ?? '—';
+    const close      = r?.today_close ?? '—';
+    const err        = r?.error ?? '—';
+    const hitBand    = r?.hit_band ?? '—';
+    const judge      = r?.judgment ?? '—';
+    const genAt      = r?.generated_at_bjt ?? '—';
+
+    return `<tr>
+      <td>${escapeHtml(show(predDate))}</td>
+      <td>${escapeHtml(show(actualDate))}</td>
+      <td>${escapeHtml(show(p50))}</td>
+      <td>${escapeHtml(show(close))}</td>
+      <td>${escapeHtml(show(err))}</td>
+      <td>${escapeHtml(show(hitBand))}</td>
+      <td>${escapeHtml(show(judge))}</td>
+      <td>${escapeHtml(show(genAt))}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div class="scrollX">
+      <table>
+        <thead>
+          <tr>
+            <th>预测日期</th>
+            <th>实际日期</th>
+            <th>预测P50</th>
+            <th>实际收盘</th>
+            <th>误差</th>
+            <th>命中区间</th>
+            <th>判断</th>
+            <th>生成时间（北京时间）</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+/* =========================================================
+ *  8) 主渲染：把 report JSON 写入 ①~⑦
+ * ========================================================= */
+
+/** ✅ 模块①字段标准化：把 turnover/amount 折叠为 amount_yi_hkd */
+function normalizeModule1Market(m){
+  const src = (m && typeof m === 'object') ? m : {};
+  const out = { ...src };
+
+  // 统一成交额（港元亿）
+  if(!isFiniteNumber(out.amount_yi_hkd)){
+    const amountHKD =
+      (isFiniteNumber(out.turnover) ? out.turnover : null) ??
+      (isFiniteNumber(out.amount) ? out.amount : null);
+    if(isFiniteNumber(amountHKD)){
+      out.amount_yi_hkd = amountHKD / 1e8;
+    }
+  }
+
+  return out;
+}
+
 function renderReport(d){
-  // 顶部 meta
-  $('metaLine').textContent =
-    `股票代码：${d.symbol||'02618.HK'} ｜ 交易日期：${d.trade_date||'未知'} ｜ 报告生成时间：${d.generated_at_bjt||'未知'}`;
+  UI.metaLine().textContent =
+    `股票代码：${d.symbol || CONFIG.DEFAULT_SYMBOL} ｜ 交易日期：${d.trade_date || '未知'} ｜ 报告生成时间：${d.generated_at_bjt || '未知'}`;
 
-  // 模块①
-  $('m1c').innerHTML = kvTable(d.module_1_market,'当日无真实交易数据（合规占位）');
+  // ① 当日实际交易数据（KV 表）
+  const m1 = normalizeModule1Market(d.module_1_market);
 
-  // ③④⑤
-  $('m3c').innerHTML = arrayTable(d.module_3_t1_distribution);
-  $('m4c').innerHTML = arrayTable(d.module_4_1m_distribution);
-  $('m5c').innerHTML = arrayTable(d.module_5_6m_distribution);
+  UI.m1().innerHTML = kvTable(m1, '当日无真实交易数据（合规占位）', {
+    // ✅ 不展示 raw；turnover/amount 已折叠到 amount_yi_hkd
+    excludeKeys: ['raw','turnover','amount'],
+    // ✅ 关键字段排序更贴合阅读
+    preferredOrder: [
+      'symbol',
+      'trade_date',
+      'open',
+      'high',
+      'low',
+      'close',
+      'volume',
+      'amount_yi_hkd',
+      'source_url',
+      'fetched_at_bjt',
+      'raw_sha1'
+    ]
+  });
 
-  // ②
-  $('m2c').innerHTML = kvTable(d.module_2_yesterday_review, '暂无数据');
+  // ③④⑤ 价格分布（数组表）
+  UI.m3().innerHTML = arrayTable(d.module_3_t1_distribution);
+  UI.m4().innerHTML = arrayTable(d.module_4_1m_distribution);
+  UI.m5().innerHTML = arrayTable(d.module_5_6m_distribution);
 
-  // ⑥：全量显示（不筛字段），关键字段排前
-  $('m6c').innerHTML = kvTable(d.module_6_model_state, '暂无数据', {
+  // ② 昨日预测回顾（截图2结构：6 行）
+  UI.m2().innerHTML = renderYesterdayReviewLikeShot2(d.module_2_yesterday_review);
+
+  // ⑥ 模型状态（KV 表：关键字段排前）
+  UI.m6().innerHTML = kvTable(d.module_6_model_state, '暂无数据', {
     preferredOrder: [
       'model_version',
       'created_at_bjt',
@@ -542,135 +783,127 @@ function renderReport(d){
     ]
   });
 
-  // ⑦
-  $('m7c').innerHTML = arrayTable(d.module_7_last5_hit, {
-    excludeKeys: ['symbol'],
-    preferredOrder: [
-      'eval_date',
-      'target_trade_date',
-      'pred_ref_date',
-      'pred_median_t1',
-      'pred_p25_t1',
-      'pred_p75_t1',
-      'actual_close',
-      'abs_error',
-      'rel_error_pct',
-      'hit_bucket',
-      'judge',
-      'volume_percentile_20d',
-      'run_id',
-      'remark'
-    ]
-  });
+  // ⑦ 过去五日命中回顾（截图字段：8 列）
+  UI.m7().innerHTML = renderHitReviewLikeShot2(d.module_7_last5_hit);
 }
 
+/* =========================================================
+ *  9) 数据加载：先主报告，失败则 fallback
+ * ========================================================= */
+
 async function fetchJson(url){
-  const r = await fetch(url + (url.includes('?') ? '&' : '?') + '_=' + Date.now(), {cache:'no-store'});
+  const u = url + (url.includes('?') ? '&' : '?') + '_=' + Date.now();
+  const r = await fetch(u, { cache: 'no-store' });
   if(!r.ok) throw new Error('HTTP ' + r.status);
   return await r.json();
 }
 
-async function loadAndRender(){
-  markPill('pill_fetch', true, 'DATA: LOADING');
-  markPill('pill_parse', true, 'PARSE: --');
-  markPill('pill_render', true, 'RENDER: --');
+function applyTopStatus(d){
+  const ok = d.status === 'SUCCESS';
+  const nonTrading = isNonTradingDayBJT(d.trade_date);
 
-  $('hint').textContent = '';
-  $('top').className = 'card';
-  $('statusTag').className = 'tag';
+  UI.hint().textContent = '';
+  UI.topCard().className = 'card';
+  UI.statusTag().className = 'tag';
+
+  if(ok){
+    UI.statusTag().textContent = '报告有效';
+    UI.statusTag().className = 'tag ok';
+    UI.hint().textContent = d.report_reason || '';
+    return;
+  }
+
+  UI.topCard().className = 'card bad';
+
+  if(nonTrading){
+    UI.statusTag().textContent = '非交易日';
+    UI.statusTag().className = 'tag fail';
+    UI.hint().textContent =
+      '当前为非交易日（港股未开市），系统已自动暂停数据抓取与预测生成；下一个交易日收盘后将自动更新。';
+    return;
+  }
+
+  UI.statusTag().textContent = (d.status === 'PLACEHOLDER') ? '占位输出' : '数据未就绪';
+  UI.statusTag().className = 'tag fail';
+  UI.hint().textContent = d.report_reason || '当日数据暂不可用，系统已输出合规占位界面。';
+}
+
+function renderAllEmptyByFatal(nonTrading){
+  UI.topCard().className = 'card bad';
+
+  if(nonTrading){
+    UI.statusTag().textContent = '非交易日';
+    UI.statusTag().className = 'tag fail';
+    UI.metaLine().textContent = '当前为非交易日（港股未开市），系统已自动暂停运行。';
+    UI.hint().textContent = '下一个交易日收盘后将自动生成并更新报告。';
+  }else{
+    UI.statusTag().textContent = '数据未就绪';
+    UI.statusTag().className = 'tag fail';
+    UI.metaLine().textContent = '法定界面已输出（数据文件尚未生成/不可访问）';
+    UI.hint().textContent = '请检查 runs/latest_report.json 或 jd-logistics-latest.json 是否可访问。';
+  }
+
+  UI.m1().innerHTML = smallEmpty();
+  UI.m2().innerHTML = smallEmpty();
+  UI.m3().innerHTML = smallEmpty();
+  UI.m4().innerHTML = smallEmpty();
+  UI.m5().innerHTML = smallEmpty();
+  UI.m6().innerHTML = smallEmpty();
+  UI.m7().innerHTML = smallEmpty();
+  UI.lastUpdate().textContent = 'Last update: --';
+}
+
+/* =========================================================
+ *  10) 主流程：load -> parse -> render
+ * ========================================================= */
+async function loadAndRender(){
+  markPill(UI.pillFetch(), true, 'DATA: LOADING');
+  markPill(UI.pillParse(), true, 'PARSE: --');
+  markPill(UI.pillRender(), true, 'RENDER: --');
 
   try{
-    // 1) 先读法定报告
-    let d;
+    let data;
     try{
-      d = await fetchJson(REPORT_URL);
-      markPill('pill_fetch', true, 'DATA: OK');
-    }catch(e1){
-      // 2) 读不到就回退简版行情
-      const mk = await fetchJson(FALLBACK_URL);
-      d = buildFallbackReport(mk);
-      markPill('pill_fetch', false, 'DATA: FALLBACK');
-      $('hint').textContent = d.report_reason || '';
-      $('top').className = 'card bad';
+      data = await fetchJson(CONFIG.REPORT_URL);
+      markPill(UI.pillFetch(), true, 'DATA: OK');
+    }catch(_e1){
+      const mk = await fetchJson(CONFIG.FALLBACK_URL);
+      data = buildFallbackReport(mk);
+      markPill(UI.pillFetch(), false, 'DATA: FALLBACK');
+      UI.hint().textContent = data.report_reason || '';
+      UI.topCard().className = 'card bad';
     }
 
-    // 状态判断
-    const ok = d.status === 'SUCCESS';
-    const nonTrading = isNonTradingDayBJT(d.trade_date);
+    applyTopStatus(data);
 
-    if(ok){
-      $('statusTag').textContent = '报告有效';
-      $('statusTag').className = 'tag ok';
-      $('hint').textContent = d.report_reason || '';
-    }else{
-      // PLACEHOLDER / FAIL / 其它
-      if(nonTrading){
-        $('statusTag').textContent = '非交易日';
-        $('statusTag').className = 'tag fail';
-        $('hint').textContent =
-          '当前为非交易日（港股未开市），系统已自动暂停数据抓取与预测生成；下一个交易日收盘后将自动更新。';
-      }else{
-        $('statusTag').textContent = (d.status === 'PLACEHOLDER') ? '占位输出' : '数据未就绪';
-        $('statusTag').className = 'tag fail';
-        $('hint').textContent = d.report_reason || '当日数据暂不可用，系统已输出合规占位界面。';
-      }
-      $('top').className = 'card bad';
-    }
-
-    // 解析 & 渲染
     try{
-      renderReport(d);
-      markPill('pill_parse', true, 'PARSE: OK');
+      renderReport(data);
+      markPill(UI.pillParse(), true, 'PARSE: OK');
     }catch(e){
-      markPill('pill_parse', false, 'PARSE: FAIL');
-      $('hint').textContent = '数据解析失败：' + (e?.message || '未知错误');
-      $('top').className = 'card bad';
+      markPill(UI.pillParse(), false, 'PARSE: FAIL');
+      UI.hint().textContent = '数据解析失败：' + (e?.message || '未知错误');
+      UI.topCard().className = 'card bad';
       return;
     }
 
-    try{
-      markPill('pill_render', true, 'RENDER: OK');
-      $('last_update').textContent = 'Last update: ' + new Date().toISOString();
-      markPill('pill_render', true, 'RENDER: OK');
-    }catch(e){
-      markPill('pill_render', false, 'RENDER: FAIL');
-    }
+    markPill(UI.pillRender(), true, 'RENDER: OK');
+    UI.lastUpdate().textContent = 'Last update: ' + new Date().toISOString();
 
-  }catch(e){
-    // 两个都失败
-    markPill('pill_fetch', false, 'DATA: FAIL');
-    markPill('pill_parse', false, 'PARSE: --');
-    markPill('pill_render', false, 'RENDER: --');
+  }catch(_fatal){
+    markPill(UI.pillFetch(), false, 'DATA: FAIL');
+    markPill(UI.pillParse(), false, 'PARSE: --');
+    markPill(UI.pillRender(), false, 'RENDER: --');
 
     const nonTrading = isNonTradingDayBJT(null);
-    $('top').className = 'card bad';
-
-    if(nonTrading){
-      $('statusTag').textContent = '非交易日';
-      $('statusTag').className = 'tag fail';
-      $('metaLine').textContent = '当前为非交易日（港股未开市），系统已自动暂停运行。';
-      $('hint').textContent = '下一个交易日收盘后将自动生成并更新报告。';
-    }else{
-      $('statusTag').textContent = '数据未就绪';
-      $('statusTag').className = 'tag fail';
-      $('metaLine').textContent = '法定界面已输出（数据文件尚未生成/不可访问）';
-      $('hint').textContent = '请检查 runs/latest_report.json 或 jd-logistics-latest.json 是否可访问。';
-    }
-
-    // 全部占位清空
-    $('m1c').innerHTML = '<div class="small">暂无数据</div>';
-    $('m2c').innerHTML = '<div class="small">暂无数据</div>';
-    $('m3c').innerHTML = '<div class="small">暂无数据</div>';
-    $('m4c').innerHTML = '<div class="small">暂无数据</div>';
-    $('m5c').innerHTML = '<div class="small">暂无数据</div>';
-    $('m6c').innerHTML = '<div class="small">暂无数据</div>';
-    $('m7c').innerHTML = '<div class="small">暂无数据</div>';
-    $('last_update').textContent = 'Last update: --';
+    renderAllEmptyByFatal(nonTrading);
   }
 }
 
+/* =========================================================
+ *  11) 启动 & 定时刷新
+ * ========================================================= */
 loadAndRender();
-setInterval(loadAndRender, AUTO_REFRESH_MS);
+setInterval(loadAndRender, CONFIG.AUTO_REFRESH_MS);
 </script>
 </body>
 </html>
