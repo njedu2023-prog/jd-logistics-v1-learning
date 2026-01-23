@@ -67,7 +67,7 @@
       font-size: 12px;
     }
 
-    .error { colorcolor: #b00020; }
+    .error { color: #b00020; } /* ✅ 修复：colorcolor → color */
   </style>
 </head>
 
@@ -87,7 +87,16 @@
 <script>
 const RAW_MD =
   "https://raw.githubusercontent.com/njedu2023-prog/jd-logistics-v1-learning/main/report_latest.md";
-const bust = `?t=${Date.now()}`;
+
+// 更稳健的数字解析：去掉逗号与非数字字符（保留小数点与负号）
+function toNumberSafe(text) {
+  if (!text) return NaN;
+  const cleaned = String(text)
+    .replace(/,/g, "")
+    .replace(/[^\d.\-]/g, "")
+    .trim();
+  return Number(cleaned);
+}
 
 async function loadReport() {
   const statusEl  = document.getElementById("status");
@@ -95,25 +104,39 @@ async function loadReport() {
   const contentEl = document.getElementById("content");
 
   try {
+    // ✅ CDN/脚本异常兜底
+    if (!window.marked || typeof window.marked.parse !== "function") {
+      throw new Error("Markdown 渲染器 marked 加载失败，请稍后刷新重试");
+    }
+
     statusEl.textContent = "拉取中…";
+
+    // ✅ 每次加载都生成 bust，避免缓存
+    const bust = `?t=${Date.now()}`;
     const res = await fetch(RAW_MD + bust, { cache: "no-store" });
+
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const md = await res.text();
 
-    // 1. Markdown → HTML
+    // 1) Markdown → HTML
     contentEl.innerHTML = marked.parse(md);
 
-    // 2. 删除“数据源”
+    // 2) 删除“数据源”相关内容（更稳）
     contentEl.querySelectorAll("p, li").forEach(el => {
-      if (el.textContent.trim().startsWith("数据源")) el.remove();
+      const t = el.textContent.trim();
+      // ✅ “数据源：xxx”/“数据源 xxx”
+      if (t.startsWith("数据源")) el.remove();
+      // ✅ 万一不是“数据源”开头，但含 raw 链接，也删掉
+      else if (/raw\.githubusercontent\.com|githubusercontent/i.test(t)) el.remove();
     });
 
+    // 删除表格中“字段=数据源”的整行
     contentEl.querySelectorAll("table tr").forEach(tr => {
       const td = tr.querySelector("td");
       if (td && td.textContent.trim() === "数据源") tr.remove();
     });
 
-    // 3. 成交量 / 成交额单位换算（核心修复）
+    // 3) 成交量 / 成交额单位换算（更稳健，避免重复换算/解析失败）
     contentEl.querySelectorAll("table tr").forEach(tr => {
       const tds = tr.querySelectorAll("td");
       if (tds.length < 2) return;
@@ -121,17 +144,19 @@ async function loadReport() {
       const key = tds[0].textContent.trim();
       const valTd = tds[1];
 
-      const raw = Number(valTd.textContent.replace(/,/g, ""));
+      // 如果已经包含单位，就不再二次换算（避免重复运行时越除越小）
+      const valText = valTd.textContent.trim();
+      if (/万股|亿港元/.test(valText)) return;
+
+      const raw = toNumberSafe(valText);
       if (!Number.isFinite(raw)) return;
 
       if (key === "成交量") {
         // 股 → 万股
         const v = raw / 10000;
         valTd.textContent = `${v.toFixed(2)} 万股`;
-      }
-
-      if (key === "成交额") {
-        // 港元 → 港元亿
+      } else if (key === "成交额") {
+        // 港元 → 亿港元
         const v = raw / 100000000;
         valTd.textContent = `${v.toFixed(2)} 亿港元`;
       }
