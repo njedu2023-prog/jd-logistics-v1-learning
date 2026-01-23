@@ -74,8 +74,6 @@
   <div class="card">
     <div class="page-title">京东物流 V1.0 报告（自动更新）</div>
     <div id="status">正在加载最新报告…</div>
-    <div class="meta" id="meta"></div>
-
     <hr style="margin:16px 0;border:none;border-top:1px solid #eee;" />
 
     <div id="content"></div>
@@ -144,12 +142,9 @@ async function loadReport() {
     });
 
     statusEl.textContent = "已显示最新报告 ✅";
-    metaEl.textContent =
-      `更新时间：${new Date().toLocaleString("zh-CN", { hour12:false })}`;
-
+    
   } catch (e) {
     statusEl.innerHTML = `<span class="error">加载失败：${e.message}</span>`;
-    metaEl.textContent = "";
   }
 }
 
