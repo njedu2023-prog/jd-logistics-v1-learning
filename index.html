@@ -35,12 +35,6 @@
       margin-bottom: 6px;
     }
 
-    .meta {
-      font-size: 10px;
-      color: #666;
-      margin-top: 6px;
-    }
-
     table {
       border-collapse: collapse;
       width: 100%;
@@ -65,7 +59,7 @@
       font-size: 12px;
     }
 
-    .error { colorcolor: #b00020; }
+    .error { color: #b00020; }
   </style>
 </head>
 
@@ -74,6 +68,7 @@
   <div class="card">
     <div class="page-title">京东物流 V1.0 报告（自动更新）</div>
     <div id="status">正在加载最新报告…</div>
+
     <hr style="margin:16px 0;border:none;border-top:1px solid #eee;" />
 
     <div id="content"></div>
@@ -87,7 +82,6 @@ const bust = `?t=${Date.now()}`;
 
 async function loadReport() {
   const statusEl  = document.getElementById("status");
-  const metaEl    = document.getElementById("meta");
   const contentEl = document.getElementById("content");
 
   try {
@@ -109,7 +103,19 @@ async function loadReport() {
       if (td && td.textContent.trim() === "数据源") tr.remove();
     });
 
-    // 3. 表格数值统一处理
+    // ✅新增：删除重复的小标题行（③④⑤模块的第二行标题）
+    contentEl.querySelectorAll("p, li").forEach(el => {
+      const t = el.textContent.trim();
+      if (
+        t.startsWith("③ 次日价格分布预测") ||
+        t.startsWith("④ 未来1个月价格分布预测") ||
+        t.startsWith("⑤ 未来6个月价格分布预测")
+      ) {
+        el.remove();
+      }
+    });
+
+    // 3. ✅表格数值统一处理（全部保留两位）
     contentEl.querySelectorAll("table tr").forEach(tr => {
       const tds = tr.querySelectorAll("td");
       if (tds.length < 2) return;
@@ -134,15 +140,19 @@ async function loadReport() {
         return;
       }
 
-      // ⭐ 新增：0.xxx → 百分数显示
+      // 百分比：0.xxx → xx.xx %
       if (raw > 0 && raw < 1) {
         valTd.textContent = `${(raw * 100).toFixed(2)} %`;
         return;
       }
+
+      // ✅兜底规则：所有价格/预测数字统一两位小数
+      valTd.textContent = raw.toFixed(2);
+      return;
     });
 
     statusEl.textContent = "已显示最新报告 ✅";
-    
+
   } catch (e) {
     statusEl.innerHTML = `<span class="error">加载失败：${e.message}</span>`;
   }
