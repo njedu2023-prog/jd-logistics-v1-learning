@@ -40,11 +40,6 @@
       <div id="status">正在加载最新报告…</div>
       <div class="meta" id="meta"></div>
 
-      <div class="actions">
-        <a class="btn" id="rawLink" href="#" target="_blank" rel="noreferrer">打开 report_latest.md（Raw）</a>
-        <a class="btn" id="repoLink" href="https://github.com/njedu2023-prog/jd-logistics-v1-learning" target="_blank" rel="noreferrer">打开仓库</a>
-      </div>
-
       <hr style="margin:16px 0; border:none; border-top:1px solid #eee;" />
 
       <div id="content"></div>
@@ -57,9 +52,6 @@
 
     // 加时间戳，避免缓存导致看到旧内容
     const bust = `?t=${Date.now()}`;
-
-    document.getElementById("rawLink").href = RAW_MD;
-
     async function loadReport() {
       const statusEl = document.getElementById("status");
       const metaEl = document.getElementById("meta");
