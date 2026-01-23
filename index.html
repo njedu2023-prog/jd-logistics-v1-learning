@@ -80,6 +80,27 @@ const RAW_MD =
   "https://raw.githubusercontent.com/njedu2023-prog/jd-logistics-v1-learning/main/report_latest.md";
 const bust = `?t=${Date.now()}`;
 
+// 判断“字段名”是否应该按百分比展示（只对明确的比例/涨跌幅/收益率/占比等字段生效）
+function isPercentKey(key) {
+  const k = (key || "").trim();
+  // 你可以按需要继续加关键词
+  return /(%|百分比|占比|比例|涨跌幅|涨幅|跌幅|收益率|回报率|波动率|变化率)/.test(k);
+}
+
+// 尝试把单元格文本转成数字（允许逗号分隔、前后空格、以及末尾单位）
+function parseNumberFromText(text) {
+  const s = (text || "").toString().trim();
+  // 保留可能的负号和小数点，去掉逗号
+  const cleaned = s.replace(/,/g, "");
+  // 如果本身就带 %，优先当作百分比文本处理（只在 isPercentKey 情况下会用到）
+  if (/%$/.test(cleaned)) {
+    const n = Number(cleaned.replace(/%$/, "").trim());
+    return Number.isFinite(n) ? { value: n, hasPercentSign: true } : null;
+  }
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? { value: n, hasPercentSign: false } : null;
+}
+
 async function loadReport() {
   const statusEl  = document.getElementById("status");
   const contentEl = document.getElementById("content");
@@ -103,7 +124,7 @@ async function loadReport() {
       if (td && td.textContent.trim() === "数据源") tr.remove();
     });
 
-    // ✅新增：删除重复的小标题行（③④⑤模块的第二行标题）
+    // ✅删除重复的小标题行（③④⑤模块的第二行标题）
     contentEl.querySelectorAll("p, li").forEach(el => {
       const t = el.textContent.trim();
       if (
@@ -115,40 +136,56 @@ async function loadReport() {
       }
     });
 
-    // 3. ✅表格数值统一处理（全部保留两位）
+    // 3. ✅表格数值统一处理（稳健版）
+    // 规则：
+    // - 成交量：股 → 万股（仅当字段名=成交量）
+    // - 成交额：港元 → 亿港元（仅当字段名=成交额）
+    // - 百分比：只在字段名明确是比例/涨跌幅/收益率/占比等时才处理（支持正负）
+    // - 其余数字：统一两位小数（价格<1 不再误判成百分比）
     contentEl.querySelectorAll("table tr").forEach(tr => {
       const tds = tr.querySelectorAll("td");
       if (tds.length < 2) return;
 
       const key = tds[0].textContent.trim();
-      const valTd = tds[1];
+      const percentKey = isPercentKey(key);
 
-      const raw = Number(valTd.textContent.replace(/,/g, ""));
-      if (!Number.isFinite(raw)) return;
+      // 从第2列开始，所有数值列都处理（有些表不止两列）
+      for (let i = 1; i < tds.length; i++) {
+        const cell = tds[i];
+        const parsed = parseNumberFromText(cell.textContent);
+        if (!parsed) continue;
 
-      // 成交量：股 → 万股
-      if (key === "成交量") {
-        const v = raw / 10000;
-        valTd.textContent = `${v.toFixed(2)} 万股`;
-        return;
+        const raw = parsed.value;
+
+        // 成交量：股 → 万股（只处理第2列，且字段名匹配）
+        if (i === 1 && key === "成交量") {
+          const v = raw / 10000;
+          cell.textContent = `${v.toFixed(2)} 万股`;
+          continue;
+        }
+
+        // 成交额：港元 → 亿港元（只处理第2列，且字段名匹配）
+        if (i === 1 && key === "成交额") {
+          const v = raw / 100000000;
+          cell.textContent = `${v.toFixed(2)} 亿港元`;
+          continue;
+        }
+
+        // 百分比（字段名明确 + 处理正负 + 兼容原文末尾自带%）
+        if (percentKey) {
+          // 如果原文本带%，那 raw 已经是“百分数”，直接保留两位并补 %
+          if (parsed.hasPercentSign) {
+            cell.textContent = `${raw.toFixed(2)} %`;
+            continue;
+          }
+          // 否则按 0.xx → xx.xx %（正负都支持）
+          cell.textContent = `${(raw * 100).toFixed(2)} %`;
+          continue;
+        }
+
+        // 兜底：统一两位小数（不再把 0.xx 误判成百分比）
+        cell.textContent = raw.toFixed(2);
       }
-
-      // 成交额：港元 → 亿港元
-      if (key === "成交额") {
-        const v = raw / 100000000;
-        valTd.textContent = `${v.toFixed(2)} 亿港元`;
-        return;
-      }
-
-      // 百分比：0.xxx → xx.xx %
-      if (raw > 0 && raw < 1) {
-        valTd.textContent = `${(raw * 100).toFixed(2)} %`;
-        return;
-      }
-
-      // ✅兜底规则：所有价格/预测数字统一两位小数
-      valTd.textContent = raw.toFixed(2);
-      return;
     });
 
     statusEl.textContent = "已显示最新报告 ✅";
