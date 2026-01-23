@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>京东物流 V1.0 报告（自动更新）</title>
 
-  <!-- Markdown 渲染器（CDN，无需本地安装） -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
   <style>
@@ -13,8 +12,6 @@
       font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,
                    "PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
       margin: 0; padding: 0; background: #fafafa; color: #111;
-
-      /* 原来 14 -> 12（整体小两号） */
       font-size: 12px;
       line-height: 1.55;
     }
@@ -22,120 +19,135 @@
     main { max-width: 980px; margin: 18px auto; padding: 0 14px 30px; }
 
     .card {
-      background: #fff; border-radius: 10px;
+      background: #fff;
+      border-radius: 10px;
       box-shadow: 0 6px 20px rgba(0,0,0,.06);
       padding: 16px;
     }
 
-    /* 标题字号：直接写死，跟 status 一样 */
-    .page-title{
-      font-size: 16px;  /* 如果原来 18 -> 16 */
+    .page-title {
+      font-size: 16px;
       font-weight: 600;
-      margin: 0 0 10px;
+      margin-bottom: 10px;
     }
 
     #status {
-      font-size: 16px;  /* 与标题一致 */
+      font-size: 16px;
       font-weight: 600;
-      margin: 0 0 6px;
+      margin-bottom: 6px;
     }
 
-    /* 原来 12 -> 10（小两号） */
-    .meta { font-size: 10px; color: #666; margin: 6px 0 0; }
+    .meta {
+      font-size: 10px;
+      color: #666;
+      margin-top: 6px;
+    }
 
-    #content { overflow-x: auto; }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 12px;
+    }
 
-    /* 表格字号：原来跟 body(14) 走的话，这里直接 12 */
-    table { border-collapse: collapse; width: 100%; font-size: 12px; }
-    th, td { border: 1px solid #e6e6e6; padding: 8px 10px; }
-    th { background: #f7f7f7; font-weight: 600; }
+    th, td {
+      border: 1px solid #e6e6e6;
+      padding: 8px 10px;
+    }
 
-    code { background:#f4f4f4; padding:2px 4px; border-radius:4px; }
-    pre  { background:#f4f4f4; padding:12px; border-radius:10px; overflow:auto; font-size: 12px; }
+    th {
+      background: #f7f7f7;
+      font-weight: 600;
+    }
 
-    .error { color: #b00020; }
+    pre {
+      background:#f4f4f4;
+      padding:12px;
+      border-radius:10px;
+      overflow:auto;
+      font-size: 12px;
+    }
+
+    .error { colorcolor: #b00020; }
   </style>
 </head>
 
 <body>
-  <main>
-    <div class="card">
-      <div class="page-title">京东物流 V1.0 报告（自动更新）</div>
-      <div id="status">正在加载最新报告…</div>
-      <div class="meta" id="meta"></div>
+<main>
+  <div class="card">
+    <div class="page-title">京东物流 V1.0 报告（自动更新）</div>
+    <div id="status">正在加载最新报告…</div>
+    <div class="meta" id="meta"></div>
 
-      <hr style="margin:16px 0; border:none; border-top:1px solid #eee;" />
+    <hr style="margin:16px 0;border:none;border-top:1px solid #eee;" />
 
-      <div id="content"></div>
-    </div>
-  </main>
+    <div id="content"></div>
+  </div>
+</main>
 
-  <script>
-    const RAW_MD =
-      "https://raw.githubusercontent.com/njedu2023-prog/jd-logistics-v1-learning/main/report_latest.md";
-    const bust = `?t=${Date.now()}`;
+<script>
+const RAW_MD =
+  "https://raw.githubusercontent.com/njedu2023-prog/jd-logistics-v1-learning/main/report_latest.md";
+const bust = `?t=${Date.now()}`;
 
-    async function loadReport() {
-      const statusEl  = document.getElementById("status");
-      const metaEl    = document.getElementById("meta");
-      const contentEl = document.getElementById("content");
+async function loadReport() {
+  const statusEl  = document.getElementById("status");
+  const metaEl    = document.getElementById("meta");
+  const contentEl = document.getElementById("content");
 
-      try {
-        statusEl.textContent = "拉取中…";
-        const res = await fetch(RAW_MD + bust, { cache: "no-store" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const md = await res.text();
+  try {
+    statusEl.textContent = "拉取中…";
+    const res = await fetch(RAW_MD + bust, { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const md = await res.text();
 
-        // 1) 渲染 Markdown
-        contentEl.innerHTML = marked.parse(md);
+    // 1. Markdown → HTML
+    contentEl.innerHTML = marked.parse(md);
 
-        // 2) 删除“数据源：xxx”这种段落/列表项
-        contentEl.querySelectorAll("p, li").forEach(el => {
-          if (el.textContent.trim().startsWith("数据源")) el.remove();
-        });
+    // 2. 删除“数据源”
+    contentEl.querySelectorAll("p, li").forEach(el => {
+      if (el.textContent.trim().startsWith("数据源")) el.remove();
+    });
 
-        // 3) 删除表格中“字段 = 数据源”的整行
-        contentEl.querySelectorAll("table tr").forEach(tr => {
-          const firstTd = tr.querySelector("td");
-          if (firstTd && firstTd.textContent.trim() === "数据源") tr.remove();
-        });
+    contentEl.querySelectorAll("table tr").forEach(tr => {
+      const td = tr.querySelector("td");
+      if (td && td.textContent.trim() === "数据源") tr.remove();
+    });
 
-        // 4) 仅新增：成交量 / 成交额格式化（千分位；成交额保留两位）
-        contentEl.querySelectorAll("table tr").forEach(tr => {
-          const tds = tr.querySelectorAll("td");
-          if (tds.length < 2) return;
+    // 3. 成交量 / 成交额单位换算（核心修复）
+    contentEl.querySelectorAll("table tr").forEach(tr => {
+      const tds = tr.querySelectorAll("td");
+      if (tds.length < 2) return;
 
-          const key = tds[0].textContent.trim();
-          const valTd = tds[1];
+      const key = tds[0].textContent.trim();
+      const valTd = tds[1];
 
-          if (key === "成交量" || key === "成交额") {
-            const raw = valTd.textContent.trim().replace(/,/g, "");
-            const num = Number(raw);
-            if (!Number.isFinite(num)) return;
+      const raw = Number(valTd.textContent.replace(/,/g, ""));
+      if (!Number.isFinite(raw)) return;
 
-            if (key === "成交量") {
-              // 成交量：尽量当整数显示（你源里是 7391913.0 这种）
-              valTd.textContent = Math.round(num).toLocaleString("en-US");
-            } else {
-              // 成交额：保留 2 位小数 + 千分位
-              valTd.textContent = num.toLocaleString("en-US", {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-              });
-            }
-          }
-        });
-
-        statusEl.textContent = "已显示最新报告 ✅";
-        metaEl.textContent = `更新时间：${new Date().toLocaleString("zh-CN")}（页面打开时实时拉取）`;
-
-      } catch (e) {
-        statusEl.innerHTML = `<span class="error">加载失败：${e.message}</span>`;
-        metaEl.textContent = "";
+      if (key === "成交量") {
+        // 股 → 万股
+        const v = raw / 10000;
+        valTd.textContent = `${v.toFixed(2)} 万股`;
       }
-    }
 
-    loadReport();
-  </script>
+      if (key === "成交额") {
+        // 港元 → 港元亿
+        const v = raw / 100000000;
+        valTd.textContent = `${v.toFixed(2)} 亿港元`;
+      }
+    });
+
+    statusEl.textContent = "已显示最新报告 ✅";
+    metaEl.textContent =
+      `更新时间：${new Date().toLocaleString("zh-CN", { hour12:false })}`;
+
+  } catch (e) {
+    statusEl.innerHTML = `<span class="error">加载失败：${e.message}</span>`;
+    metaEl.textContent = "";
+  }
+}
+
+loadReport();
+</script>
 </body>
 </html>
