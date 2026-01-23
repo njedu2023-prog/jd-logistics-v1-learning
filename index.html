@@ -113,7 +113,7 @@ async function loadReport() {
       if (td && td.textContent.trim() === "数据源") tr.remove();
     });
 
-    // 3. 成交量 / 成交额单位换算（核心修复）
+    // 3. 表格数值统一处理
     contentEl.querySelectorAll("table tr").forEach(tr => {
       const tds = tr.querySelectorAll("td");
       if (tds.length < 2) return;
@@ -124,16 +124,24 @@ async function loadReport() {
       const raw = Number(valTd.textContent.replace(/,/g, ""));
       if (!Number.isFinite(raw)) return;
 
+      // 成交量：股 → 万股
       if (key === "成交量") {
-        // 股 → 万股
         const v = raw / 10000;
         valTd.textContent = `${v.toFixed(2)} 万股`;
+        return;
       }
 
+      // 成交额：港元 → 亿港元
       if (key === "成交额") {
-        // 港元 → 港元亿
         const v = raw / 100000000;
         valTd.textContent = `${v.toFixed(2)} 亿港元`;
+        return;
+      }
+
+      // ⭐ 新增：0.xxx → 百分数显示
+      if (raw > 0 && raw < 1) {
+        valTd.textContent = `${(raw * 100).toFixed(2)} %`;
+        return;
       }
     });
 
