@@ -1,130 +1,119 @@
 {
   "status": "SUCCESS",
   "symbol": "02618.HK",
-  "trade_date": "2026-04-16",
-  "generated_at_bjt": "2026-04-16T19:39:17+0800",
+  "trade_date": "2026-04-17",
+  "generated_at_bjt": "2026-04-17T19:32:16+0800",
   "report_reason": "成功拉取并写入当日市场数据",
   "module_1_market": {
     "symbol": "02618.HK",
-    "trade_date": "2026-04-16",
-    "open": 15.7,
-    "high": 15.97,
-    "low": 15.55,
-    "close": 15.95,
-    "volume": 19737028.0,
-    "turnover": 313017792.9,
+    "trade_date": "2026-04-17",
+    "open": 15.9,
+    "high": 16.0,
+    "low": 15.71,
+    "close": 15.87,
+    "volume": 12691379.0,
+    "turnover": 200803702.76,
     "source_url": "https://raw.githubusercontent.com/njedu2023-prog/JD-data/main/jd-logistics-latest.json",
-    "fetched_at_bjt": "2026-04-16T19:39:17+0800",
+    "fetched_at_bjt": "2026-04-17T19:32:16+0800",
     "raw": {
       "symbol": "02618.HK",
-      "date": "2026-04-16",
-      "open": 15.7,
-      "high": 15.97,
-      "low": 15.55,
-      "close": 15.95,
-      "volume": 19737028.0,
-      "amount": 313017792.9,
+      "date": "2026-04-17",
+      "open": 15.9,
+      "high": 16.0,
+      "low": 15.71,
+      "close": 15.87,
+      "volume": 12691379.0,
+      "amount": 200803702.76,
       "quality_flag": "PASS",
-      "data_version": "D20260416.01"
+      "data_version": "D20260417.01"
     }
   },
   "module_2_yesterday_review": {
     "symbol": "02618.HK",
-    "y_pred_trade_date": "2026-04-15",
-    "today_trade_date": "2026-04-16",
-    "y_pred_p50": 15.599,
-    "today_close": 15.95,
-    "error": 0.351,
-    "hit_band": "P75~P95",
-    "judgment": "可接受（边缘区间）",
-    "generated_at_bjt": "2026-04-16T19:39:17+0800"
+    "y_pred_trade_date": "2026-04-16",
+    "today_trade_date": "2026-04-17",
+    "y_pred_p50": 16.004,
+    "today_close": 15.87,
+    "error": -0.134,
+    "hit_band": "P25~P50",
+    "judgment": "命中（中枢区间）",
+    "generated_at_bjt": "2026-04-17T19:32:16+0800"
   },
   "module_3_t1_distribution": [
     {
       "p": 0.05,
-      "v": 15.174
+      "v": 15.121
     },
     {
       "p": 0.25,
-      "v": 15.659
+      "v": 15.589
     },
     {
       "p": 0.5,
-      "v": 16.004
+      "v": 15.923
     },
     {
       "p": 0.75,
-      "v": 16.358
+      "v": 16.264
     },
     {
       "p": 0.95,
-      "v": 16.88
+      "v": 16.767
     }
   ],
   "module_4_1m_distribution": [
     {
       "p": 0.05,
-      "v": 13.423
+      "v": 13.431
     },
     {
       "p": 0.25,
-      "v": 15.501
+      "v": 15.445
     },
     {
       "p": 0.5,
-      "v": 17.133
+      "v": 17.02
     },
     {
       "p": 0.75,
-      "v": 18.936
+      "v": 18.755
     },
     {
       "p": 0.95,
-      "v": 21.868
+      "v": 21.567
     }
   ],
   "module_5_6m_distribution": [
     {
       "p": 0.05,
-      "v": 13.476
+      "v": 13.518
     },
     {
       "p": 0.25,
-      "v": 19.174
+      "v": 19.034
     },
     {
       "p": 0.5,
-      "v": 24.5
+      "v": 24.145
     },
     {
       "p": 0.75,
-      "v": 31.306
+      "v": 30.628
     },
     {
       "p": 0.95,
-      "v": 44.543
+      "v": 43.125
     }
   ],
   "module_6_model_state": {
     "model_version": "V1.0",
     "symbol": "02618.HK",
-    "updated_at_bjt": "2026-04-16T19:39:17+0800",
-    "sigma_ewma_1m_ann": 0.514,
-    "mu_daily": 0.003931,
-    "return_samples": 83
+    "updated_at_bjt": "2026-04-17T19:32:16+0800",
+    "sigma_ewma_1m_ann": 0.4987,
+    "mu_daily": 0.003824,
+    "return_samples": 84
   },
   "module_7_last5_hit": [
-    {
-      "symbol": "02618.HK",
-      "y_pred_trade_date": "2026-04-09",
-      "today_trade_date": "2026-04-10",
-      "y_pred_p50": 14.484,
-      "today_close": 14.44,
-      "error": -0.044,
-      "hit_band": "P25~P50",
-      "judgment": "命中（中枢区间）",
-      "generated_at_bjt": "2026-04-10T19:27:13+0800"
-    },
     {
       "symbol": "02618.HK",
       "y_pred_trade_date": "2026-04-10",
@@ -168,6 +157,17 @@
       "hit_band": "P75~P95",
       "judgment": "可接受（边缘区间）",
       "generated_at_bjt": "2026-04-16T19:39:17+0800"
+    },
+    {
+      "symbol": "02618.HK",
+      "y_pred_trade_date": "2026-04-16",
+      "today_trade_date": "2026-04-17",
+      "y_pred_p50": 16.004,
+      "today_close": 15.87,
+      "error": -0.134,
+      "hit_band": "P25~P50",
+      "judgment": "命中（中枢区间）",
+      "generated_at_bjt": "2026-04-17T19:32:16+0800"
     }
   ]
 }
