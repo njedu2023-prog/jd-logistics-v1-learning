@@ -1,8 +1,8 @@
 {
   "model_version": "V1.0",
   "symbol": "02618.HK",
-  "updated_at_bjt": "2026-07-27T21:25:31+0800",
-  "sigma_ewma_1m_ann": 0.2964,
-  "mu_daily": 0.001243,
-  "return_samples": 150
+  "updated_at_bjt": "2026-07-28T20:22:35+0800",
+  "sigma_ewma_1m_ann": 0.2984,
+  "mu_daily": 0.001372,
+  "return_samples": 151
 }
