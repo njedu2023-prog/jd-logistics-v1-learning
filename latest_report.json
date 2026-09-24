@@ -1,130 +1,119 @@
 {
   "status": "SUCCESS",
   "symbol": "02618.HK",
-  "trade_date": "2026-09-23",
-  "generated_at_bjt": "2026-09-23T23:09:54+0800",
+  "trade_date": "2026-09-24",
+  "generated_at_bjt": "2026-09-24T23:26:51+0800",
   "report_reason": "成功拉取并写入当日市场数据",
   "module_1_market": {
     "symbol": "02618.HK",
-    "trade_date": "2026-09-23",
-    "open": 10.4,
-    "high": 10.43,
-    "low": 10.26,
-    "close": 10.26,
-    "volume": 7037586.0,
-    "turnover": 72429314.11,
+    "trade_date": "2026-09-24",
+    "open": 10.19,
+    "high": 10.27,
+    "low": 10.14,
+    "close": 10.23,
+    "volume": 5924153.0,
+    "turnover": 60598659.37,
     "source_url": "https://raw.githubusercontent.com/njedu2023-prog/JD-data/main/jd-logistics-latest.json",
-    "fetched_at_bjt": "2026-09-23T23:09:54+0800",
+    "fetched_at_bjt": "2026-09-24T23:26:51+0800",
     "raw": {
       "symbol": "02618.HK",
-      "date": "2026-09-23",
-      "open": 10.4,
-      "high": 10.43,
-      "low": 10.26,
-      "close": 10.26,
-      "volume": 7037586.0,
-      "amount": 72429314.11,
+      "date": "2026-09-24",
+      "open": 10.19,
+      "high": 10.27,
+      "low": 10.14,
+      "close": 10.23,
+      "volume": 5924153.0,
+      "amount": 60598659.37,
       "quality_flag": "PASS",
-      "data_version": "D20260923.01"
+      "data_version": "D20260924.01"
     }
   },
   "module_2_yesterday_review": {
     "symbol": "02618.HK",
-    "y_pred_trade_date": "2026-09-22",
-    "today_trade_date": "2026-09-23",
-    "y_pred_p50": 10.392,
-    "today_close": 10.26,
-    "error": -0.132,
+    "y_pred_trade_date": "2026-09-23",
+    "today_trade_date": "2026-09-24",
+    "y_pred_p50": 10.252,
+    "today_close": 10.23,
+    "error": -0.022,
     "hit_band": "P25~P50",
     "judgment": "命中（中枢区间）",
-    "generated_at_bjt": "2026-09-23T23:09:54+0800"
+    "generated_at_bjt": "2026-09-24T23:26:51+0800"
   },
   "module_3_t1_distribution": [
     {
       "p": 0.05,
-      "v": 9.903
+      "v": 9.884
     },
     {
       "p": 0.25,
-      "v": 10.107
+      "v": 10.082
     },
     {
       "p": 0.5,
-      "v": 10.252
+      "v": 10.222
     },
     {
       "p": 0.75,
-      "v": 10.398
+      "v": 10.363
     },
     {
       "p": 0.95,
-      "v": 10.612
+      "v": 10.57
     }
   ],
   "module_4_1m_distribution": [
     {
       "p": 0.05,
-      "v": 8.607
+      "v": 8.622
     },
     {
       "p": 0.25,
-      "v": 9.45
+      "v": 9.441
     },
     {
       "p": 0.5,
-      "v": 10.084
+      "v": 10.055
     },
     {
       "p": 0.75,
-      "v": 10.761
+      "v": 10.709
     },
     {
       "p": 0.95,
-      "v": 11.816
+      "v": 11.726
     }
   ],
   "module_5_6m_distribution": [
     {
       "p": 0.05,
-      "v": 6.274
+      "v": 6.33
     },
     {
       "p": 0.25,
-      "v": 7.889
+      "v": 7.904
     },
     {
       "p": 0.5,
-      "v": 9.25
+      "v": 9.224
     },
     {
       "p": 0.75,
-      "v": 10.845
+      "v": 10.763
     },
     {
       "p": 0.95,
-      "v": 13.636
+      "v": 13.441
     }
   ],
   "module_6_model_state": {
     "model_version": "V1.0",
     "symbol": "02618.HK",
-    "updated_at_bjt": "2026-09-23T23:09:54+0800",
-    "sigma_ewma_1m_ann": 0.3337,
-    "mu_daily": -0.000602,
-    "return_samples": 191
+    "updated_at_bjt": "2026-09-24T23:26:51+0800",
+    "sigma_ewma_1m_ann": 0.3237,
+    "mu_daily": -0.000614,
+    "return_samples": 192
   },
   "module_7_last5_hit": [
-    {
-      "symbol": "02618.HK",
-      "y_pred_trade_date": "2026-09-16",
-      "today_trade_date": "2026-09-17",
-      "y_pred_p50": 10.361,
-      "today_close": 10.4,
-      "error": 0.039,
-      "hit_band": "P50~P75",
-      "judgment": "命中（中枢区间）",
-      "generated_at_bjt": "2026-09-17T23:16:07+0800"
-    },
     {
       "symbol": "02618.HK",
       "y_pred_trade_date": "2026-09-17",
@@ -168,6 +157,17 @@
       "hit_band": "P25~P50",
       "judgment": "命中（中枢区间）",
       "generated_at_bjt": "2026-09-23T23:09:54+0800"
+    },
+    {
+      "symbol": "02618.HK",
+      "y_pred_trade_date": "2026-09-23",
+      "today_trade_date": "2026-09-24",
+      "y_pred_p50": 10.252,
+      "today_close": 10.23,
+      "error": -0.022,
+      "hit_band": "P25~P50",
+      "judgment": "命中（中枢区间）",
+      "generated_at_bjt": "2026-09-24T23:26:51+0800"
     }
   ]
 }
