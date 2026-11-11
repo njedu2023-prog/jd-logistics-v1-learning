@@ -2,7 +2,7 @@
   "status": "SUCCESS",
   "symbol": "02618.HK",
   "trade_date": "2026-10-30",
-  "generated_at_bjt": "2026-11-11T02:07:42+0800",
+  "generated_at_bjt": "2026-11-12T02:00:08+0800",
   "report_reason": "市场数据已是最新交易日（不重复追加market_history）",
   "module_1_market": {
     "symbol": "02618.HK",
@@ -14,7 +14,7 @@
     "volume": 7878544.0,
     "turnover": 78183161.545,
     "source_url": "https://raw.githubusercontent.com/njedu2023-prog/JD-data/main/jd-logistics-latest.json",
-    "fetched_at_bjt": "2026-11-11T02:07:41+0800",
+    "fetched_at_bjt": "2026-11-12T02:00:08+0800",
     "raw": {
       "symbol": "02618.HK",
       "date": "2026-10-30",
@@ -37,7 +37,7 @@
     "error": 0.008,
     "hit_band": "P50~P75",
     "judgment": "命中（中枢区间）",
-    "generated_at_bjt": "2026-11-11T02:07:42+0800"
+    "generated_at_bjt": "2026-11-12T02:00:08+0800"
   },
   "module_3_t1_distribution": [
     {
@@ -108,23 +108,12 @@
   "module_6_model_state": {
     "model_version": "V1.0",
     "symbol": "02618.HK",
-    "updated_at_bjt": "2026-11-11T02:07:42+0800",
+    "updated_at_bjt": "2026-11-12T02:00:08+0800",
     "sigma_ewma_1m_ann": 0.2662,
     "mu_daily": -0.000702,
     "return_samples": 216
   },
   "module_7_last5_hit": [
-    {
-      "symbol": "02618.HK",
-      "y_pred_trade_date": "2026-10-30",
-      "today_trade_date": "2026-10-30",
-      "y_pred_p50": 9.882,
-      "today_close": 9.89,
-      "error": 0.008,
-      "hit_band": "P50~P75",
-      "judgment": "命中（中枢区间）",
-      "generated_at_bjt": "2026-11-05T02:11:12+0800"
-    },
     {
       "symbol": "02618.HK",
       "y_pred_trade_date": "2026-10-30",
@@ -168,6 +157,17 @@
       "hit_band": "P50~P75",
       "judgment": "命中（中枢区间）",
       "generated_at_bjt": "2026-11-11T02:07:42+0800"
+    },
+    {
+      "symbol": "02618.HK",
+      "y_pred_trade_date": "2026-10-30",
+      "today_trade_date": "2026-10-30",
+      "y_pred_p50": 9.882,
+      "today_close": 9.89,
+      "error": 0.008,
+      "hit_band": "P50~P75",
+      "judgment": "命中（中枢区间）",
+      "generated_at_bjt": "2026-11-12T02:00:08+0800"
     }
   ]
 }
